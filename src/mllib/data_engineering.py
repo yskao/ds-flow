@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 
-from mllib.hlh_rfm import RFM
+from mllib.repurchase.hlh_rfm import RFM
 
 
 def add_product_id_combo_column(
