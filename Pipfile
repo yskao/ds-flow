@@ -1,0 +1,34 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+prefect = "*"
+prefect-airbyte = "*"
+prefect-gcp = {extras = ["secret_manager"], version = "*"}
+msal = "*"
+sqlalchemy = "*"
+pandas = "*"
+requests = "*"
+google-cloud-bigquery = {extras = ["pandas"], version = "*"}
+pyodbc = "*"
+lifetimes = "*"
+xgboost = "*"
+pendulum = "*"
+scikit-learn = "*"
+numpy = "*"
+statsmodels = "*"
+
+[dev-packages]
+flake8 = "*"
+bandit = "*"
+mypy = "*"
+black = "*"
+isort = "*"
+ipython = "*"
+pre-commit = "*"
+ipykernel = "*"
+
+[requires]
+python_version = "3.11"
