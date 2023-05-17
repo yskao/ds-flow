@@ -19,6 +19,10 @@ pendulum = "*"
 scikit-learn = "*"
 numpy = "*"
 statsmodels = "*"
+pyopenssl = "*"
+pipenv = "*"
+install = "*"
+pandas-gbq = "*"
 
 [dev-packages]
 flake8 = "*"
