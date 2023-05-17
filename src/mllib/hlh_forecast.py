@@ -289,7 +289,7 @@ class HLHForecast:
         logging.info("model generated forecast values: %s", inverse_normalized_data)
 
         last_date = self.data.time.max()
-        dates = pd.date_range(start=last_date, periods=n_periods + 1, freq=f"{str(self.interval_time)}MS")
+        dates = pd.date_range(start=last_date, periods=n_periods + 1, freq=str(self.interval_time)+"MS")
         self.dates = dates[dates != last_date]
         self.forecast_df = pd.DataFrame(
             {"date": self.dates, self.target: inverse_normalized_data},
