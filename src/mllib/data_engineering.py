@@ -9,18 +9,7 @@ def add_product_id_combo_column(
     sales_df: pd.DataFrame,
     product_id_array: np.array,
 ) -> pd.DataFrame:
-    """
-    新增「product_id_combo」欄位到銷售資料 DataFrame.
-
-    Args:
-    ----
-        sales_df (pd.DataFrame): 銷售資料 DataFrame
-        product_id_array (np.array): 包含產品 ID 的 NumPy 陣列
-
-    Returns:
-    -------
-            pd.DataFrame: 包含新增欄位的銷售資料 DataFrame
-    """
+    """新增 product_id_combo 欄位."""
     start_dt = sales_df["month_begin_date"].min()
     end_dt = sales_df["month_begin_date"].max()
     date_range = pd.date_range(start=start_dt, end=end_dt, freq="MS")
@@ -37,17 +26,7 @@ def add_product_id_combo_column(
 def set_training_weight(
     output_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    根據時間設定訓練權重,今年的所有資料為 100,其餘按照年度遞減.
-
-    Args:
-    ----
-        output_df (pd.DataFrame): 包含產品 ID、時間的 DataFrame
-
-    Returns:
-    -------
-        pd.DataFrame: 包含訓練權重的 DataFrame
-    """
+    """根據時間,設定每個樣本的權重."""
     output_df["date"] = pd.to_datetime(output_df["date"])
     years = output_df["date"].dt.year.unique()
     ratio = 100 / len(years)
@@ -60,19 +39,7 @@ def shift_data(
     lag_shift: int=0,
     future_shift: int=0,
 ) -> pd.DataFrame:
-    """
-    將時間序列資料移動指定的步數.
-
-    Args:
-    ----
-        data (pd.Series): 時間序列資料
-        lag_shift (int): 往前移動的步數,預設為 0
-        future_shift (int): 往後移動的步數,預設為 0
-
-    Returns:
-    -------
-        pd.DataFrame: 移動後的 DataFrame,包含移動前的資料與移動後的資料
-    """
+    """將時間序列資料移動指定的步數."""
     error_msg = "shift value must be integer"
     if not isinstance(future_shift, int) or not isinstance(lag_shift, int):
         raise TypeError(error_msg)

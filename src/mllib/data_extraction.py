@@ -3,7 +3,8 @@ from datetime import datetime
 
 import pandas as pd
 from dateutil.relativedelta import relativedelta
-from utilities import common_tools as ct
+from google.cloud.bigquery import Client as BigQueryClient
+from google.cloud.bigquery import QueryJobConfig, ScalarQueryParameter
 
 from mllib.sql_script import CylinderSQL
 
@@ -23,32 +24,35 @@ class ExtractDataForTraining:
         raise NotImplementedError(error_msg)
 
 
-    def get_product_categories(self) -> pd.DataFrame:
-        """取得 HLH 資料庫中的產品類資訊。包含品牌、品號、產品資訊。."""
+    def get_product_categories(self, bigquery_client: BigQueryClient) -> pd.DataFrame:
+        """取得 HLH 資料庫中的產品類資訊。包含品牌、品號 (sku)、產品資訊."""
         query_string = """
         SELECT
-            品牌 AS brand,
-            品號 AS product_id,
-            產品大類 AS cat_code_1,
-            產品中類 AS cat_code_2,
-            產品小類 AS cat_code_3,
-            產品性質,
-            庫存屬性,
-            會計分類
+            brand,
+            sku,
+            product_category_1,
+            product_category_2,
+            product_category_3,
+            product_type,
+            stock_type,
+            accounting_type
         FROM
-            hlh_dw.dbo.dim_products
+            dim.products
         """
-        with ct.connect_to_mssql("hlh_dw") as conn:
-            product_df = pd.read_sql(query_string, con=conn)
+        product_df = bigquery_client.query(query_string).result()
         category_df = product_df.loc[
-            lambda df: (df["會計分類"] == "商品存貨") & (df["庫存屬性"] != "贈品"),
-            ["brand", "product_id", "cat_code_1", "cat_code_2", "cat_code_3"],
+            lambda df: (df["accounting_type"] == "商品存貨") & (df["stock_type"] != "贈品"),
+            ["brand", "sku", "product_category_1", "product_category_2", "product_category_3"],
         ]
         return category_df
 
-    # TODO: 之後將 psi.utils.sql.get_sales_data 的共用性解決後,再將這個函式移除
+
     def get_sales_data(
-        self, start_date: str, end_date: str, department_code: str,
+        self,
+        bigquery_client: BigQueryClient,
+        start_date: str,
+        end_date: str,
+        department_code: str,
     ) -> pd.DataFrame:
         """
         取得銷售資料,包含日期、銷貨數量、銷貨淨數量、銷貨贈品數量、銷貨金額、銷貨淨金額、品號、事業處代號。
@@ -60,80 +64,67 @@ class ExtractDataForTraining:
         next_month_date = datetime(end_date.year, end_date.month, 1)
         sql_sales = """
             SELECT
-                sales.日期,
-                sales.銷貨數量,
-                sales.銷貨數量 - sales.退貨數量 AS 銷貨淨數量,
-                sales.銷貨贈品數量,
-                sales.銷貨金額,
-                sales.銷貨金額 - sales.退貨金額 AS 銷貨淨金額,
-                sales.品號,
-                事業處代號
+                sales.order_date,
+                sales.order_date,
+                sales.sales_quantity,
+                sales.sales_quantity - sales.return_quantity AS net_sales_quantity,
+                sales.sales_gift_quantity,
+                sales.sales_amount,
+                sales.sales_amount - sales.return_amount AS net_sales_amount,
+                sales.sku,
+                dep.division_id
             FROM
-                hlh_dw.dbo.dwd_sales_and_returns_all AS sales
+                dwd.sales_and_returns_all as sales
             LEFT JOIN
-                hlh_dw.dbo.dim_departments AS dep
+                dim.departments AS dep
             ON
-                sales.完整部門代號 = dep.完整部門代號
-            WHERE 事業處代號 like %(department_code)s
-            AND 日期 < %(next_month_date)s
-            AND 日期 >= %(start_date)s
+                sales.full_department_id = dep.full_department_id
+            WHERE division_id like @department_code
+                AND order_date < @next_month_date
+                AND order_date >= @start_date
         """
-        params = {
-            "department_code": f"{department_code}%%",
-            "next_month_date": next_month_date.strftime("%Y-%m-%d"),
-            "start_date": start_date,
-        }
-        with ct.connect_to_mssql("hlh") as conn:
-            sales_df = pd.read_sql(sql_sales, conn, params=params)
-
+        query_parameters = [
+            ScalarQueryParameter("department_code", "STRING", f"{department_code}%%"),
+            ScalarQueryParameter("next_month_date", "STRING", next_month_date.strftime("%Y-%m-%d")),
+            ScalarQueryParameter("start_date", "STRING", start_date),
+        ]
+        sales_df = bigquery_client.query(
+            query=sql_sales,
+            job_config=QueryJobConfig(
+                query_parameters=query_parameters,
+            ),
+        ).result().to_dataframe()
 
         if department_code == "P02":
-            sales_df["銷貨淨數量"] += sales_df["銷貨贈品數量"]  # 二處的銷貨淨數量要加上銷貨贈品數量
+            sales_df["net_sales_quantity"] += sales_df["sales_gift_quantity"]  # 二處的銷貨淨數量要加上銷貨贈品數量
 
         return sales_df.assign(
-            date=lambda df: pd.to_datetime(df["日期"]),
+            date=lambda df: pd.to_datetime(df["order_date"]),
             month_begin_date=lambda df: df["date"].dt.strftime("%Y-%m-01"),
         )
 
 
-    def get_agent_forecast_data(
-        self,
-        start_month: str,
-        end_month: str,
-        training_info: pd.DataFrame,
-    ) -> pd.DataFrame:
-        """
-        取得業務預測資料,包含 M、date、product_id、sales_agent。
-        M: 預測時間差
-        start_month: 預測開始月份('%Y-%m-%d')
-        end_month: 預測結束月份('%Y-%m-%d').
-        """
-        month_versions_range = pd.date_range(start=start_month, end=end_month,freq="MS") - pd.DateOffset(months=1)
-        month_versions_range_quot_str = [month.strftime("%Y-%m") for month in month_versions_range]
-        sql = """
-                select
-                    月份版本, 日期, 自訂品號, 數量
-                from
-                    f_sales_forecast_versions
-                where
-                    月份版本 in %(month_versions_range_quot_str)s
-            """
-        params = {"month_versions_range_quot_str": month_versions_range_quot_str}
-        with ct.connect_to_mssql("hlh_psi") as conn:
-            forecast_df = pd.read_sql(sql, conn, params=params)
-        forecast_target = forecast_df[forecast_df["自訂品號"].isin(training_info["product_id_combo"])].copy()
-        forecast_target[["月份版本", "日期"]] = forecast_target[["月份版本", "日期"]].apply(pd.to_datetime)
-        forecast_target = forecast_target.groupby(["自訂品號", "月份版本", "日期"]).agg({"數量": "sum"}).reset_index()
-        forecast_target["M"] = (
-            (forecast_target["日期"].dt.year - forecast_target["月份版本"].dt.year) * 12
-            + (forecast_target["日期"].dt.month - forecast_target["月份版本"].dt.month)
-        )
-        forecast_target = forecast_target.rename(columns={"自訂品號":"product_id_combo", "日期": "date", "數量":"sales_agent"})
-        output_df = (
-            forecast_target[["M", "date", "product_id_combo", "sales_agent"]]
-            .query("1 <= M <= 4").reset_index(drop=True)
-        )
-        return output_df
+    # def get_agent_forecast_data(
+    #     self,
+    #     start_month: str,
+    #     end_month: str,
+    #     training_info: pd.DataFrame,
+    # ) -> pd.DataFrame:
+    #     """
+    #     取得業務預測資料,包含 M、date、product_id、sales_agent。
+    #     end_month: 預測結束月份('%Y-%m-%d').
+    #     """
+    #     sql = """
+    #             select
+    #                 月份版本, 日期, 自訂品號, 數量
+    #             from
+    #                 f_sales_forecast_versions
+    #             where
+    #                 月份版本 in %(month_versions_range_quot_str)s
+    #         """
+    #     with ct.connect_to_mssql("hlh_psi") as conn:
+    #     forecast_target["M"] = (
+    #         .query("1 <= M <= 4").reset_index(drop=True)
 
 
     def get_output_df(self) -> None:
@@ -178,34 +169,29 @@ class ExtractDataForTraining:
         return predict_df
 
 
-    def get_cylinder_df(self):
+    def get_cylinder_df(self, bigquery_client: BigQueryClient) -> pd.DataFrame:
 
         orders_hs_old_sql_query = CylinderSQL.orders_hs_old_sql()
         orders_hs_91app_sql_query = CylinderSQL.orders_hs_91app_sql()
         orders_pos_sql_query = CylinderSQL.orders_pos_sql()
         products_df_sql_query = CylinderSQL.products_df_sql()
 
-        with ct.connect_to_mssql("hlh") as conn:
-            orders_hs_old_df = pd.read_sql(orders_hs_old_sql_query, conn)
-
-        with ct.connect_to_mssql("hlh") as conn:
-            orders_hs_91app_df = pd.read_sql(orders_hs_91app_sql_query, conn)
-
-        with ct.connect_to_mssql("hlh") as conn:
-            orders_pos_df = pd.read_sql(orders_pos_sql_query, conn)
-
-        with ct.connect_to_mssql("hlh_dw") as conn:
-            products_df = pd.read_sql(products_df_sql_query, conn)
+        orders_hs_old_df = bigquery_client.query(orders_hs_old_sql_query).result().to_dataframe()
+        orders_hs_91app_df = bigquery_client.query(orders_hs_91app_sql_query).result().to_dataframe()
+        orders_pos_df = bigquery_client.query(orders_pos_sql_query).result().to_dataframe()
+        products_df = bigquery_client.query(products_df_sql_query).result().to_dataframe()
 
         orders_df = (
             pd.concat([orders_hs_old_df, orders_hs_91app_df, orders_pos_df])
             .merge(
-                products_df[["品號", "品名", "產品中類代號", "產品中類", "產品大類"]],
-                on=["品號", "品名", "產品大類"], how="left",
+                products_df[["sku", "product_name", "product_category_id_2", "product_category_2", "product_category_1"]],
+                on=["sku", "product_name", "product_category_1"], how="left",
             )
             .assign(
-                日期=lambda df: pd.to_datetime(df["日期"]),
+                order_date=lambda df: pd.to_datetime(df["order_date"]),
+                sales_amount=lambda df: pd.to_numeric(df["sales_amount"]),
+                sales_quantity=lambda df: pd.to_numeric(df["sales_quantity"]),
             )
-            .loc[lambda df: df["手機"].apply(lambda x: len(x) == 10)]
+            .loc[lambda df: df["mobile"].apply(lambda x: len(x) == 10)]
         )
         return orders_df
