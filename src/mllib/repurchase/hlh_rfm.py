@@ -169,7 +169,7 @@ class RFM:
         # fill nan value
         rfm_df_dtypes = rfm_df.dtypes
         rfm_df[rfm_df.select_dtypes(exclude="category").columns] = (
-            rfm_df[rfm_df.select_dtypes(exclude="category").columns]#.fillna(0)
+            rfm_df[rfm_df.select_dtypes(exclude="category").columns].fillna(0)
         )
         logging.info("finish")
         return rfm_df.astype(rfm_df_dtypes)
