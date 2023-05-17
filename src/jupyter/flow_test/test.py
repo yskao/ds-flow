@@ -1,4 +1,3 @@
-import logging
 
 import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
@@ -29,4 +28,5 @@ def get_product_categories(bigquery_client: BigQueryClient) -> pd.DataFrame:
     return category_df
 
 if __name__ == "__main__":
-    logging.info(get_product_categories(get_bigquery_client()))
+    bigquery_client=get_bigquery_client()
+    bigquery_client.query("SELECT * FROM data-warehouse-369301.dim.products").result().to_dataframe()
