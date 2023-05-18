@@ -193,7 +193,6 @@ def soda_stream_prediction_flow(init: bool = False) -> None:
         create_ds_soda_stream_prediction_table(bigquery_client)
 
     assess_date = pd.Timestamp.now("Asia/Taipei").tz_localize(None)
-    assess_date = "2023-04-01"
 
     train_df, pred_df, all_cycle_period_df = prepare_training_data(
         bigquery_client=bigquery_client,
