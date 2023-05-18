@@ -135,9 +135,10 @@ def gen_repurchase_train_and_test_df(
 
     # 設定判斷有無回購的基準線
     transaction_df.loc[:, datetime_col] = pd.to_datetime(transaction_df[datetime_col])
+    transaction_df = transaction_df.query(f"'{start_date}' <= {datetime_col} < '{assess_date}'")
     transaction_df = RFM._get_time_tag(transaction_df, datetime_col, time_feature)
-    max_date = transaction_df[datetime_col].max()
-    cutoff = max_date - pd.to_timedelta(n_days, unit="D")
+    max_date = transaction_df[datetime_col].max() # 根據每個人的最後一次購買時間當作最大時間
+    cutoff = max_date - pd.to_timedelta(n_days, unit="D") # 最後一次購買時間 - n_days 作為標籤定義
 
     # 將 in 和 out 資料區別出來,out 資料用來作為是否有回購的依據
     tmp_in_df = transaction_df.loc[lambda df: df[datetime_col] <= cutoff].copy()
