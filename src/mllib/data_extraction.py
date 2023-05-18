@@ -192,6 +192,7 @@ class ExtractDataForTraining:
                 sales_amount=lambda df: pd.to_numeric(df["sales_amount"]),
                 sales_quantity=lambda df: pd.to_numeric(df["sales_quantity"]),
             )
-            .loc[lambda df: df["mobile"].apply(lambda x: len(x) == 10)]
+            .loc[lambda df: df["mobile"].apply(lambda x: len(str(x)) == 10)]
+            .loc[lambda df: df["order_date"].apply(lambda x: type(x) == pd.Timestamp)]
         )
         return orders_df

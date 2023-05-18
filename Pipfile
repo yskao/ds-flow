@@ -13,16 +13,11 @@ pandas = "*"
 requests = "*"
 google-cloud-bigquery = {extras = ["pandas"], version = "*"}
 pyodbc = "*"
+numpy = "*"
 lifetimes = "*"
 xgboost = "*"
-pendulum = "*"
 scikit-learn = "*"
-numpy = "*"
 statsmodels = "*"
-pyopenssl = "*"
-pipenv = "*"
-install = "*"
-pandas-gbq = "*"
 
 [dev-packages]
 flake8 = "*"

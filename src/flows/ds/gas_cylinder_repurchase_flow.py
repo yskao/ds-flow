@@ -1,9 +1,10 @@
 
-import logging
 from typing import TypeVar
 
+import numpy as np
 import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
+from google.cloud.bigquery import LoadJobConfig
 from mllib.data_engineering import (
     gen_dummies,
     gen_repurchase_train_and_test_df,
@@ -11,8 +12,10 @@ from mllib.data_engineering import (
 )
 from mllib.data_extraction import ExtractDataForTraining
 from mllib.repurchase.hlh_repurchase import HLHRepurchase
+from prefect import flow, get_run_logger, task
 
 from utils.gcp.client import get_bigquery_client
+from utils.prefect import generate_flow_name
 
 Predictor = TypeVar("Predictor")
 
@@ -44,7 +47,7 @@ source_map = {
 }
 
 
-
+@task
 def create_ds_soda_stream_prediction_table(bigquery_client: BigQueryClient) -> None:
     """Create DS.DS_SodaStream_Prediction."""
     bigquery_client.query(
@@ -74,14 +77,14 @@ def create_ds_soda_stream_prediction_table(bigquery_client: BigQueryClient) -> N
     ).result()
 
 
-def prepare_training_data(bigquery_client: BigQueryClient) -> pd.DataFrame:
+@task(name="log_data_processing")
+def prepare_training_data(bigquery_client: BigQueryClient, assess_date: pd.Timestamp) -> pd.DataFrame:
+    logging = get_run_logger()
     logging.info("start to prepare training data...")
-
-    assess_date = pd.Timestamp.now("Asia/Taipei")
-
 
     logging.info("downloadind_data_from_bq...")
     data_extraction = ExtractDataForTraining()
+    # 取資料時,會包含到目前 BQ 裡面最新的資料
     data = data_extraction.get_cylinder_df(bigquery_client)
 
     logging.info("remove_english_symbol_for_series...")
@@ -97,12 +100,13 @@ def prepare_training_data(bigquery_client: BigQueryClient) -> pd.DataFrame:
         orders_df
         .assign(order_date=lambda df: df["order_date"].dt.to_period("D"))
         .groupby("mobile", as_index=False)["order_date"].nunique()
-        .query("order_date > 1")
+        .query("order_date > 2")
         ["mobile"]
     )
     orders_correct_df = orders_df[orders_df["mobile"].isin(match_mobile)]
 
     logging.info("gen training and predicting data...")
+    # 切資料時,會根據 assess_date 定義資料的使用區間
     train_df, pred_df = gen_repurchase_train_and_test_df(
         transaction_df=orders_correct_df,
         customer_id_col="mobile",
@@ -114,9 +118,26 @@ def prepare_training_data(bigquery_client: BigQueryClient) -> pd.DataFrame:
         quantity_col="sales_quantity",
         extra_features=["HS-91APP", "HS-OLD", "POS"],
     )
-    return train_df, pred_df
+
+    _, all_cycle_period_df = gen_repurchase_train_and_test_df(
+        transaction_df=orders_df,
+        customer_id_col="mobile",
+        datetime_col="order_date",
+        price_col="sales_amount",
+        start_date="2000-01-01",
+        assess_date=assess_date,
+        n_days=120,
+        quantity_col="sales_quantity",
+        extra_features=["HS-91APP", "HS-OLD", "POS"],
+    )
+
+    train_df["mobile"] = train_df["mobile"].astype("category")
+    pred_df["mobile"] = pred_df["mobile"].astype("category")
+
+    return train_df, pred_df, all_cycle_period_df
 
 
+@task
 def train_model(train_df: pd.DataFrame) -> Predictor:
     ml_model = HLHRepurchase(
         n_days=120,
@@ -124,32 +145,46 @@ def train_model(train_df: pd.DataFrame) -> Predictor:
     )
     ml_model.fit(
         train_df.drop(["last_date", "assess_date"], axis=1),
-        target="repurchase_flag",
+        target="repurchase_120_flag",
     )
     return ml_model
 
 
-
+@task
 def eval_metrics(ml_model: Predictor) -> float:
     roc_auc = ml_model.repurchase_model._get_training_evaluation()
     return roc_auc
 
 
-
+@task
 def get_feature_importance(ml_model: Predictor) -> pd.DataFrame:
     return ml_model.repurchase_model._get_feature_importance()
 
 
-
+@task
 def soda_stream_repurchase_predict(
         ml_model: Predictor,
         pred_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    return ml_model.predict(pred_df)
+    return pd.DataFrame(
+        ml_model.repurchase_predict(pred_df),
+        columns=ml_model.repurchase_model.clf_model.classes_,
+    ).round(4)[1.0]
 
 
+@task
+def upload_df_to_bq(bigquery_client: BigQueryClient, upload_df: pd.DataFrame) -> str:
+    """上傳資料到 BQ."""
+    job = bigquery_client.load_table_from_dataframe(
+        dataframe=upload_df,
+        destination="DS.DS_SodaStream_Prediction",
+        project="data-warehouse-369301",
+        job_config=LoadJobConfig(write_disposition="WRITE_APPEND"),
+    ).result()
+    return job.state
 
 
+@flow(name=generate_flow_name())
 def soda_stream_prediction_flow(init: bool = False) -> None:
     """Flow for ds.ds_sodastream_prediction."""
     bigquery_client = get_bigquery_client()
@@ -157,28 +192,47 @@ def soda_stream_prediction_flow(init: bool = False) -> None:
     if init:
         create_ds_soda_stream_prediction_table(bigquery_client)
 
-    train_df, pred_df = prepare_training_data(bigquery_client)
+    assess_date = pd.Timestamp.now("Asia/Taipei").tz_localize(None)
+    assess_date = "2023-04-01"
+
+    train_df, pred_df, all_cycle_period_df = prepare_training_data(
+        bigquery_client=bigquery_client,
+        assess_date=assess_date,
+    )
+
     ml_model = train_model(train_df)
-    result_df = soda_stream_repurchase_predict(ml_model, pred_df)
+    pred_result = pd.DataFrame(
+        {
+            "mobile": pred_df["mobile"],
+            "ml": soda_stream_repurchase_predict(ml_model, pred_df),
+        },
+    )
+    no_cycle_period_member_df = (
+        all_cycle_period_df[all_cycle_period_df["frequency"] == 1]
+        .rename(bq_columns, axis="columns")
+    ).assign(
+        LastPurchase_Datetime=lambda df: pd.to_datetime(
+            df["LastPurchase_Datetime"], utc=True).dt.tz_convert("Asia/Taipei"),
+        Assess_Date=lambda df: pd.to_datetime(df["Assess_Date"], format="mixed").dt.date,
+    )
 
     bq_df = (
         pred_df
-        .merge(result_df, on="mobile")
+        .merge(pred_result, on="mobile", how="left")
         .assign(
             mobile=lambda df: df["mobile"].astype(str),
             last_date=lambda df: pd.to_datetime(df["last_date"], utc=True).dt.tz_convert("Asia/Taipei"),
-            assess_date=lambda df: df["assess_date"].date(),
+            assess_date=lambda df: df["assess_date"].dt.date,
             etl_datetime=pd.Timestamp.now("Asia/Taipei"),
+            ml_label=lambda df: np.where(df["ml"]>=0.5, 1, 0),
         )
         .rename(bq_columns, axis="columns")
     )
 
-    bq_df.to_gbq(
-        destination_table="DS.DS_SodaStream_Prediction",
-        project_id="data-warehouse-369301",
-        if_exists="append",
-    )
+    bq_df = pd.concat((bq_df, no_cycle_period_member_df), axis=0).reset_index(drop=True)
+    bq_df["ETL_Datetime"] = bq_df["ETL_Datetime"].fillna(method="ffill")
+    upload_df_to_bq(bigquery_client, bq_df)
 
 
 if __name__ == "__main__":
-    soda_stream_prediction_flow()
+    soda_stream_prediction_flow(False)
