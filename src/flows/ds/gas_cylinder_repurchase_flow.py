@@ -255,6 +255,7 @@ def soda_stream_prediction_flow(init: bool = False) -> None:
         )
         .loc[lambda df: df["seasonal"] == seasonal_value,
              ["Member_Mobile", "Repurchase_Possibility"]]
+        .reset_index(drop=True)
     )
 
     bq_df = (
@@ -270,13 +271,22 @@ def soda_stream_prediction_flow(init: bool = False) -> None:
     )
 
     bq_df = pd.concat((bq_df, no_cycle_period_member_df), axis=0).reset_index(drop=True)
+
     # 加入季節性的用戶到原本預測的用戶中
+    bq_df_has_seasonal_probability = (
+        bq_df.loc[bq_df["Member_Mobile"].isin(pred_seasonal_result["Member_Mobile"]), "Repurchase_Possibility"])
+
+    pred_seasonal_result["Repurchase_Possibility"] = np.where(
+        bq_df_has_seasonal_probability >=pred_seasonal_result["Repurchase_Possibility"],
+        bq_df_has_seasonal_probability,
+        pred_seasonal_result["Repurchase_Possibility"],
+    )
+
     bq_df.loc[bq_df["Member_Mobile"].isin(pred_seasonal_result["Member_Mobile"]), "Repurchase_Possibility"] = (
         pred_seasonal_result["Repurchase_Possibility"])
     bq_df["Repurchase_Flag"] = np.where(bq_df["Repurchase_Possibility"]>=0.5, 1, 0)
     bq_df["ETL_Datetime"] = bq_df["ETL_Datetime"].fillna(method="ffill")
     upload_df_to_bq(bigquery_client, bq_df)
-
 
 if __name__ == "__main__":
     soda_stream_prediction_flow(True)
