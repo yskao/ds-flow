@@ -131,10 +131,24 @@ def prepare_training_data(bigquery_client: BigQueryClient, assess_date: pd.Times
         extra_features=["HS-91APP", "HS-OLD", "POS"],
     )
 
+    # 季節性用戶資料
+    train_seasonal_df, pred_seasonal_df = gen_repurchase_train_and_test_df(
+        transaction_df=orders_correct_df,
+        customer_id_col="mobile",
+        datetime_col="order_date",
+        price_col="sales_amount",
+        start_date="2000-01-01",
+        assess_date=assess_date,
+        n_days=120,
+        quantity_col="sales_quantity",
+        time_feature="seasonal",
+        extra_features=["HS-91APP", "HS-OLD", "POS"],
+    )
+
     train_df["mobile"] = train_df["mobile"].astype("category")
     pred_df["mobile"] = pred_df["mobile"].astype("category")
 
-    return train_df, pred_df, all_cycle_period_df
+    return train_df, pred_df, train_seasonal_df, pred_seasonal_df, all_cycle_period_df
 
 
 @task
@@ -148,6 +162,19 @@ def train_model(train_df: pd.DataFrame) -> Predictor:
         target="repurchase_120_flag",
     )
     return ml_model
+
+
+@task
+def train_seasonal_model(train_seasonal_df: pd.DataFrame) -> Predictor:
+    ml_seasonal_model = HLHRepurchase(
+        n_days=120,
+        method="ml",
+    )
+    ml_seasonal_model.fit(
+        train_seasonal_df.drop(["last_date", "assess_date"], axis=1),
+        target="repurchase_120_flag",
+    )
+    return ml_seasonal_model
 
 
 @task
@@ -193,8 +220,9 @@ def soda_stream_prediction_flow(init: bool = False) -> None:
         create_ds_soda_stream_prediction_table(bigquery_client)
 
     assess_date = pd.Timestamp.now("Asia/Taipei").tz_localize(None)
+    seasonal_value = (assess_date + pd.DateOffset(days=1)).quarter
 
-    train_df, pred_df, all_cycle_period_df = prepare_training_data(
+    train_df, pred_df, train_seasonal_df, pred_seasonal_df, all_cycle_period_df = prepare_training_data(
         bigquery_client=bigquery_client,
         assess_date=assess_date,
     )
@@ -215,6 +243,20 @@ def soda_stream_prediction_flow(init: bool = False) -> None:
         Assess_Date=lambda df: pd.to_datetime(df["Assess_Date"], format="mixed").dt.date,
     )
 
+    # 季節性預測
+    ml_seasonal_model = train_seasonal_model(train_seasonal_df)
+    pred_seasonal_result = (
+        pd.DataFrame(
+            {
+                "Member_Mobile": pred_seasonal_df["mobile"],
+                "seasonal": pred_seasonal_df["seasonal"],
+                "Repurchase_Possibility": soda_stream_repurchase_predict(ml_seasonal_model, pred_seasonal_df),
+            },
+        )
+        .loc[lambda df: df["seasonal"] == seasonal_value,
+             ["Member_Mobile", "Repurchase_Possibility"]]
+    )
+
     bq_df = (
         pred_df
         .merge(pred_result, on="mobile", how="left")
@@ -223,15 +265,18 @@ def soda_stream_prediction_flow(init: bool = False) -> None:
             last_date=lambda df: pd.to_datetime(df["last_date"], utc=True).dt.tz_convert("Asia/Taipei"),
             assess_date=lambda df: df["assess_date"].dt.date,
             etl_datetime=pd.Timestamp.now("Asia/Taipei"),
-            ml_label=lambda df: np.where(df["ml"]>=0.5, 1, 0),
         )
         .rename(bq_columns, axis="columns")
     )
 
     bq_df = pd.concat((bq_df, no_cycle_period_member_df), axis=0).reset_index(drop=True)
+    # 加入季節性的用戶到原本預測的用戶中
+    bq_df.loc[bq_df["Member_Mobile"].isin(pred_seasonal_result["Member_Mobile"]), "Repurchase_Possibility"] = (
+        pred_seasonal_result["Repurchase_Possibility"])
+    bq_df["Repurchase_Flag"] = np.where(bq_df["Repurchase_Possibility"]>=0.5, 1, 0)
     bq_df["ETL_Datetime"] = bq_df["ETL_Datetime"].fillna(method="ffill")
     upload_df_to_bq(bigquery_client, bq_df)
 
 
 if __name__ == "__main__":
-    soda_stream_prediction_flow(False)
+    soda_stream_prediction_flow(True)
