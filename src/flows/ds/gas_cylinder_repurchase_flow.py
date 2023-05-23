@@ -4,7 +4,7 @@ from typing import TypeVar
 import numpy as np
 import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
-from google.cloud.bigquery import LoadJobConfig
+from google.cloud.bigquery import LoadJobConfig, QueryJobConfig, ScalarQueryParameter
 from mllib.data_engineering import (
     gen_dummies,
     gen_repurchase_train_and_test_df,
@@ -202,6 +202,21 @@ def soda_stream_repurchase_predict(
     ).round(4)[1.0]
 
 
+@task
+def delete_assess_date_duplicate(bigquery_client: BigQueryClient, assess_date: pd.Timestamp) -> None:
+    query_parameters = [
+            ScalarQueryParameter("Assess_Date", "STRING", str(assess_date.date())),
+        ]
+    delete_query = """
+        DELETE FROM DS.DS_SodaStream_Prediction
+        WHERE Assess_Date = @assess_date
+    """
+    bigquery_client.query(
+        delete_query,
+        job_config=QueryJobConfig(query_parameters=query_parameters),
+    ).result()
+
+
 @task(name="data_upload_to_bq")
 def upload_df_to_bq(bigquery_client: BigQueryClient, upload_df: pd.DataFrame) -> str:
     """上傳資料到 BQ."""
@@ -218,6 +233,10 @@ def upload_df_to_bq(bigquery_client: BigQueryClient, upload_df: pd.DataFrame) ->
 def gas_cylinder_repurchase_flow(init: bool = False) -> None:
     """Flow for ds.ds_sodastream_prediction."""
     bigquery_client = get_bigquery_client()
+    member_cylinder_points_df = (
+        ExtractDataForTraining().get_cylinder_points_df(bigquery_client)
+        .rename(columns={"GasCylinder_Point_Cnt": "Member_GasCylindersReward_Point"})
+    )
 
     if init:
         create_ds_soda_stream_prediction_table(bigquery_client)
@@ -289,9 +308,11 @@ def gas_cylinder_repurchase_flow(init: bool = False) -> None:
         pred_seasonal_result["Repurchase_Possibility"])
     bq_df["Repurchase_Flag"] = np.where(bq_df["Repurchase_Possibility"]>=0.5, 1, 0)
     bq_df["ETL_Datetime"] = bq_df["ETL_Datetime"].fillna(method="ffill")
-    # 新增集點資料 - tmp
-    bq_df["Member_GasCylindersReward_Point"] = np.nan
+
+    # 新增集點資料
+    bq_df = bq_df.merge(member_cylinder_points_df, on="Member_Mobile", how="left")
+    delete_assess_date_duplicate(bigquery_client, assess_date)
     upload_df_to_bq(bigquery_client, bq_df)
 
 if __name__ == "__main__":
-    gas_cylinder_repurchase_flow(True)
+    gas_cylinder_repurchase_flow(False)
