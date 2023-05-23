@@ -47,15 +47,16 @@ source_map = {
 }
 
 
-@task
+@task(name="create_prediction_table_for_soda_stream")
 def create_ds_soda_stream_prediction_table(bigquery_client: BigQueryClient) -> None:
     """Create DS.DS_SodaStream_Prediction."""
     bigquery_client.query(
         """
             CREATE OR REPLACE TABLE DS.DS_SodaStream_Prediction (
-                ETL_Datetime DATETIME OPTIONS(description="ETL執行日期"),
-                Assess_Date DATE OPTIONS(description="模型執行日期"),
-                Member_Mobile STRING OPTIONS(description="會員手機號碼"),
+                ETL_Datetime DATETIME NOT NULL OPTIONS(description="ETL執行日期"),
+                Assess_Date DATE NOT NULL OPTIONS(description="模型執行日期"),
+                Member_Mobile STRING NOT NULL OPTIONS(description="會員手機號碼"),
+                Member_GasCylindersReward_Point INT64 OPTIONS(description="鋼瓶集點數"),
                 Chan_HS91App_Day_Cnt INT64 OPTIONS(description="累計從線上91APP的購買天數"),
                 Chan_HSOld_Day_Cnt INT64 OPTIONS(description="累計從線上舊官網的購買天數"),
                 Chan_POS_Day_Cnt INT64 OPTIONS(description="累計從線下實體店的購買次數"),
@@ -69,8 +70,8 @@ def create_ds_soda_stream_prediction_table(bigquery_client: BigQueryClient) -> N
                 Avg_Duration_Day_Cnt FLOAT64 OPTIONS(description="平均購買週期天數"),
                 GasCylinders_Qty INT64 OPTIONS(description="累計鋼瓶數量"),
                 GasCylinders_PerOrd_Qty FLOAT64 OPTIONS(description="平均一次購買鋼瓶數量"),
-                Repurchase_Flag INT64 OPTIONS(description="用戶 N 天回來的標籤"),
-                Repurchase_Possibility FLOAT64 OPTIONS(description="區間內購買機率")
+                Repurchase_Flag BOOL OPTIONS(description="用戶 N 天回來的標籤"),
+                Repurchase_Possibility FLOAT64 OPTIONS(description="區間內購買機率"),
             )
             PARTITION BY Assess_Date
         """,
@@ -147,11 +148,13 @@ def prepare_training_data(bigquery_client: BigQueryClient, assess_date: pd.Times
 
     train_df["mobile"] = train_df["mobile"].astype("category")
     pred_df["mobile"] = pred_df["mobile"].astype("category")
+    train_seasonal_df["mobile"] = train_seasonal_df["mobile"].astype("category")
+    pred_seasonal_df["mobile"] = pred_seasonal_df["mobile"].astype("category")
 
     return train_df, pred_df, train_seasonal_df, pred_seasonal_df, all_cycle_period_df
 
 
-@task
+@task(name="without_seasonal_training")
 def train_model(train_df: pd.DataFrame) -> Predictor:
     ml_model = HLHRepurchase(
         n_days=120,
@@ -164,7 +167,7 @@ def train_model(train_df: pd.DataFrame) -> Predictor:
     return ml_model
 
 
-@task
+@task(name="with_seasonal_training")
 def train_seasonal_model(train_seasonal_df: pd.DataFrame) -> Predictor:
     ml_seasonal_model = HLHRepurchase(
         n_days=120,
@@ -199,7 +202,7 @@ def soda_stream_repurchase_predict(
     ).round(4)[1.0]
 
 
-@task
+@task(name="data_upload_to_bq")
 def upload_df_to_bq(bigquery_client: BigQueryClient, upload_df: pd.DataFrame) -> str:
     """上傳資料到 BQ."""
     job = bigquery_client.load_table_from_dataframe(
@@ -212,7 +215,7 @@ def upload_df_to_bq(bigquery_client: BigQueryClient, upload_df: pd.DataFrame) ->
 
 
 @flow(name=generate_flow_name())
-def soda_stream_prediction_flow(init: bool = False) -> None:
+def gas_cylinder_repurchase_flow(init: bool = False) -> None:
     """Flow for ds.ds_sodastream_prediction."""
     bigquery_client = get_bigquery_client()
 
@@ -277,7 +280,7 @@ def soda_stream_prediction_flow(init: bool = False) -> None:
         bq_df.loc[bq_df["Member_Mobile"].isin(pred_seasonal_result["Member_Mobile"]), "Repurchase_Possibility"])
 
     pred_seasonal_result["Repurchase_Possibility"] = np.where(
-        bq_df_has_seasonal_probability >=pred_seasonal_result["Repurchase_Possibility"],
+        bq_df_has_seasonal_probability >= pred_seasonal_result["Repurchase_Possibility"],
         bq_df_has_seasonal_probability,
         pred_seasonal_result["Repurchase_Possibility"],
     )
@@ -286,7 +289,9 @@ def soda_stream_prediction_flow(init: bool = False) -> None:
         pred_seasonal_result["Repurchase_Possibility"])
     bq_df["Repurchase_Flag"] = np.where(bq_df["Repurchase_Possibility"]>=0.5, 1, 0)
     bq_df["ETL_Datetime"] = bq_df["ETL_Datetime"].fillna(method="ffill")
+    # 新增集點資料 - tmp
+    bq_df["Member_GasCylindersReward_Point"] = np.nan
     upload_df_to_bq(bigquery_client, bq_df)
 
 if __name__ == "__main__":
-    soda_stream_prediction_flow(True)
+    gas_cylinder_repurchase_flow(True)
