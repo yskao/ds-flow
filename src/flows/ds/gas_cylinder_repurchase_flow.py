@@ -53,9 +53,10 @@ def create_ds_soda_stream_prediction_table(bigquery_client: BigQueryClient) -> N
     bigquery_client.query(
         """
             CREATE OR REPLACE TABLE DS.DS_SodaStream_Prediction (
-                ETL_Datetime DATETIME OPTIONS(description="ETL執行日期"),
-                Assess_Date DATE OPTIONS(description="模型執行日期"),
-                Member_Mobile STRING OPTIONS(description="會員手機號碼"),
+                ETL_Datetime DATETIME NOT NULL OPTIONS(description="ETL執行日期"),
+                Assess_Date DATE NOT NULL OPTIONS(description="模型執行日期"),
+                Member_Mobile STRING NOT NULL OPTIONS(description="會員手機號碼"),
+                Member_GasCylindersReward_Point INT64 OPTIONS(description="鋼瓶集點數"),
                 Chan_HS91App_Day_Cnt INT64 OPTIONS(description="累計從線上91APP的購買天數"),
                 Chan_HSOld_Day_Cnt INT64 OPTIONS(description="累計從線上舊官網的購買天數"),
                 Chan_POS_Day_Cnt INT64 OPTIONS(description="累計從線下實體店的購買次數"),
@@ -69,8 +70,8 @@ def create_ds_soda_stream_prediction_table(bigquery_client: BigQueryClient) -> N
                 Avg_Duration_Day_Cnt FLOAT64 OPTIONS(description="平均購買週期天數"),
                 GasCylinders_Qty INT64 OPTIONS(description="累計鋼瓶數量"),
                 GasCylinders_PerOrd_Qty FLOAT64 OPTIONS(description="平均一次購買鋼瓶數量"),
-                Repurchase_Flag INT64 OPTIONS(description="用戶 N 天回來的標籤"),
-                Repurchase_Possibility FLOAT64 OPTIONS(description="區間內購買機率")
+                Repurchase_Flag BOOL OPTIONS(description="用戶 N 天回來的標籤"),
+                Repurchase_Possibility FLOAT64 OPTIONS(description="區間內購買機率"),
             )
             PARTITION BY Assess_Date
         """,
@@ -288,7 +289,9 @@ def gas_cylinder_repurchase_flow(init: bool = False) -> None:
         pred_seasonal_result["Repurchase_Possibility"])
     bq_df["Repurchase_Flag"] = np.where(bq_df["Repurchase_Possibility"]>=0.5, 1, 0)
     bq_df["ETL_Datetime"] = bq_df["ETL_Datetime"].fillna(method="ffill")
+    # 新增集點資料 - tmp
+    bq_df["Member_GasCylindersReward_Point"] = np.nan
     upload_df_to_bq(bigquery_client, bq_df)
 
 if __name__ == "__main__":
-    gas_cylinder_repurchase_flow(False)
+    gas_cylinder_repurchase_flow(True)
