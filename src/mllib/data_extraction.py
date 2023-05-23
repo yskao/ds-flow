@@ -196,3 +196,7 @@ class ExtractDataForTraining:
             .loc[lambda df: df["order_date"].apply(lambda x: type(x) == pd.Timestamp)]
         )
         return orders_df
+
+
+    def get_cylinder_points_df(self, bigquery_client: BigQueryClient) -> pd.DataFrame:
+        return bigquery_client.query(CylinderSQL.gas_cylinder_points_sql()).result().to_dataframe()
