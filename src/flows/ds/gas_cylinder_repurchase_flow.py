@@ -235,7 +235,11 @@ def gas_cylinder_repurchase_flow(init: bool = False) -> None:
     bigquery_client = get_bigquery_client()
     member_cylinder_points_df = (
         ExtractDataForTraining().get_cylinder_points_df(bigquery_client)
-        .rename(columns={"GasCylinder_Point_Cnt": "Member_GasCylindersReward_Point"})
+        .rename(columns={
+            "GasCylinder_Point_Cnt": "Member_GasCylindersReward_Point",
+            "Phone": "Member_Mobile",
+            },
+        )
     )
 
     if init:
@@ -309,8 +313,9 @@ def gas_cylinder_repurchase_flow(init: bool = False) -> None:
     bq_df["Repurchase_Flag"] = np.where(bq_df["Repurchase_Possibility"]>=0.5, 1, 0)
     bq_df["ETL_Datetime"] = bq_df["ETL_Datetime"].fillna(method="ffill")
 
-    # 新增集點資料
+    # 新增集點資料 - 沒有點數的會員補 0
     bq_df = bq_df.merge(member_cylinder_points_df, on="Member_Mobile", how="left")
+    bq_df["Member_GasCylindersReward_Point"] = bq_df["Member_GasCylindersReward_Point"].fillna(0)
     delete_assess_date_duplicate(bigquery_client, assess_date)
     upload_df_to_bq(bigquery_client, bq_df)
 
