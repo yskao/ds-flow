@@ -93,7 +93,7 @@ class CylinderSQL:
     def gas_cylinder_points_sql() -> str:
         gas_cylinder_points_sql_query = """
             SELECT
-                Phone AS Member_Mobile,
+                Phone,
                 SUM(Quantity) AS GasCylinder_Point_Cnt
             FROM
                 (
