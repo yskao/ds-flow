@@ -12,6 +12,7 @@ from mllib.data_engineering import (
 )
 from mllib.data_extraction import ExtractDataForTraining
 from mllib.repurchase.hlh_repurchase import HLHRepurchase
+from mllib.sql_script import cdp_soda_stream_sql
 from prefect import flow, get_run_logger, task
 
 from utils.gcp.client import get_bigquery_client
@@ -229,6 +230,11 @@ def upload_df_to_bq(bigquery_client: BigQueryClient, upload_df: pd.DataFrame) ->
     return job.state
 
 
+@task(name="gen_cdp_required_data")
+def gen_cdp_soda_stream_data_to_bq(bigquery_client: BigQueryClient):
+    return bigquery_client.query(cdp_soda_stream_sql()).result()
+
+
 @flow(name=generate_flow_name())
 def gas_cylinder_repurchase_flow(init: bool = False) -> None:
     """Flow for ds.ds_sodastream_prediction."""
@@ -318,6 +324,8 @@ def gas_cylinder_repurchase_flow(init: bool = False) -> None:
     bq_df["Member_GasCylindersReward_Point"] = bq_df["Member_GasCylindersReward_Point"].fillna(0)
     delete_assess_date_duplicate(bigquery_client, assess_date)
     upload_df_to_bq(bigquery_client, bq_df)
+    # 從 bq 抓資料計算再另存 table
+    gen_cdp_soda_stream_data_to_bq(bigquery_client)
 
 if __name__ == "__main__":
     gas_cylinder_repurchase_flow(False)
