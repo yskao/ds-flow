@@ -197,3 +197,41 @@ class CylinderSQL:
             SELECT * FROM dim.products
         """
         return products_df_sql_query
+
+
+def cdp_soda_stream_sql() -> str:
+    query = """
+        CREATE OR REPLACE TABLE CDP.DS_SodaStream_Prediction AS
+        SELECT
+            Member_Mobile AS identity_mobile,
+            CAST(Assess_Date AS STRING) AS soda_assess_date,
+            Member_GasCylindersReward_Point AS soda_gascylindersreward_point,
+            CAST(LastPurchase_Datetime AS STRING) AS soda_lastpurchase_datetime,
+            Repurchase_Flag AS soda_repurchase_flag,
+            Repurchase_Possibility AS soda_repurchase_possibility,
+            New_Counter_Code AS soda_member_counter,
+            Avg_Duration_Day_Cnt AS soda_avgdurationday_cnt
+        FROM DS.DS_SodaStream_Prediction AS ds_soda_stream_prediction
+        LEFT JOIN (
+        SELECT
+            mobile,
+            counter
+        FROM dim.members
+        ) AS dim_members
+        ON ds_soda_stream_prediction.Member_Mobile = dim_members.mobile
+        LEFT JOIN (
+        SELECT
+            Counter_Code,
+            (
+                CASE
+                    WHEN ReplaceDyson_Counter_Code='' THEN Counter_Code
+                    ELSE ReplaceDyson_Counter_Code
+                END
+            ) AS New_Counter_Code
+            FROM dim.counter
+        ) AS dim_counter
+        ON dim_members.counter = dim_counter.Counter_Code
+        WHERE Assess_Date = CURRENT_DATE("Asia/Taipei")
+        AND Repurchase_Possibility IS NOT NULL;
+        """
+    return query
