@@ -204,6 +204,13 @@ def soda_stream_repurchase_predict(
 
 
 @task
+def get_extra_soda_stream_sample(bigquery_client: BigQueryClient) -> pd.DataFrame:
+    """Get extra sample to be added to prediciton df."""
+    query = """SELECT * FROM DS.DS_SodaStream_Prediction_TestList"""
+    return bigquery_client.query(query).result().to_dataframe()
+
+
+@task
 def delete_assess_date_duplicate(bigquery_client: BigQueryClient, assess_date: pd.Timestamp) -> None:
     query_parameters = [
             ScalarQueryParameter("Assess_Date", "STRING", str(assess_date.date())),
