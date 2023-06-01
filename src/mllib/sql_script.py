@@ -202,6 +202,11 @@ class CylinderSQL:
 def cdp_soda_stream_sql() -> str:
     query = """
         CREATE OR REPLACE TABLE CDP.DS_SodaStream_Prediction AS
+        WITH ds_soda_stream_prediction AS (
+            SELECT * FROM data-warehouse-369301.DS.DS_SodaStream_Prediction
+            UNION ALL
+            SELECT * FROM data-warehouse-369301.DS.DS_SodaStream_Prediction_TestList
+        )
         SELECT
             Member_Mobile AS identity_mobile,
             CAST(Assess_Date AS STRING) AS soda_assess_date,
@@ -211,7 +216,7 @@ def cdp_soda_stream_sql() -> str:
             Repurchase_Possibility AS soda_repurchase_possibility,
             New_Counter_Code AS soda_member_counter,
             Avg_Duration_Day_Cnt AS soda_avgdurationday_cnt
-        FROM DS.DS_SodaStream_Prediction AS ds_soda_stream_prediction
+        FROM ds_soda_stream_prediction
         LEFT JOIN (
         SELECT
             mobile,
