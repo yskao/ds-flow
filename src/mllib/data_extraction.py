@@ -110,19 +110,18 @@ class ExtractDataForTraining:
     #     end_month: str,
     #     training_info: pd.DataFrame,
     # ) -> pd.DataFrame:
-    #     """
-    #     取得業務預測資料,包含 M、date、product_id、sales_agent。
-    #     end_month: 預測結束月份('%Y-%m-%d').
-    #     """
+    #     """取得業務預測資料."""
     #     sql = """
     #             select
-    #                 月份版本, 日期, 自訂品號, 數量
+    #                 month_version, date, product_id_combo, sales_quantity
     #             from
     #                 f_sales_forecast_versions
     #             where
     #                 月份版本 in %(month_versions_range_quot_str)s
     #         """
     #     with ct.connect_to_mssql("hlh_psi") as conn:
+
+
     #     forecast_target["M"] = (
     #         .query("1 <= M <= 4").reset_index(drop=True)
 
