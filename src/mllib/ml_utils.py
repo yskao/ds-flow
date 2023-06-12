@@ -3,40 +3,28 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pendulum
-from utilities import common_tools as ct
-from utilities.google_sheets import get_google_sheet_client
+from google.cloud.bigquery import Client as BigQueryClient
+from google.cloud.bigquery import LoadJobConfig, QueryJobConfig, ScalarQueryParameter
 
 from mllib.data_engineering import add_product_id_combo_column, prepare_predict_table_to_sql
+from utils.google_sheets import get_google_sheet_client
 
 
-def predict_data_to_sql(
+def predict_data_to_bq(
         predict_df: pd.DataFrame,
         product_info: pd.DataFrame,
-        db_table_name: str,
+        bq_table: str,
         department_code: str,
+        bigquery_client: BigQueryClient,
 ) -> None:
-    """
-    將預測資料存到資料庫.
-
-    Args:
-    ----
-        predict_df (pd.DataFrame): 預測資料
-        product_info (pd.DataFrame): 產品資訊表
-        db_table_name (str): 資料庫表名稱
-        department_code (str): 部門代碼
-
-    Returns:
-    -------
-        None
-    """
+    """將預測資料存到資料庫."""
     predict_df_cols = [
         "month_version",
         "dep_code",
         "brand",
-        "cat_code_1",
-        "cat_code_2",
-        "cat_code_3",
+        "product_category_1",
+        "product_category_2",
+        "product_category_3",
         "product_id_combo",
         "product_name",
         "date",
@@ -48,23 +36,34 @@ def predict_data_to_sql(
         "likely_ub",
         "less_likely_ub",
     ]
-
-    model_version = pendulum.now(tz="Asia/Taipei").strftime("%Y-%m-%d")
-
+    model_version = (
+        pd.Timestamp.now("Asia/Taipei")
+        .strftime("%Y-%m-%d")
+    )
     predict_df = prepare_predict_table_to_sql(
         predict_df=predict_df,
         product_data_info=product_info,
         predicted_on_date=model_version,
         department_code=department_code,
     )
-
-    with ct.connect_to_mssql("hlh_psi") as conn:
-        predict_df[predict_df_cols].to_sql(
-            name=db_table_name,
-            con=conn,
-            if_exists="append",
-            index=False,
-        )
+    query_parameters = [
+            ScalarQueryParameter("model_version", "STRING", model_version),
+        ]
+    delete_query = """
+        DELETE FROM DS.ds_p03_model_predict
+        WHERE month_version = @model_version
+    """
+    bigquery_client.query(
+        delete_query,
+        job_config=QueryJobConfig(query_parameters=query_parameters),
+    ).result()
+    job = bigquery_client.load_table_from_dataframe(
+        dataframe=predict_df[predict_df_cols],
+        destination=bq_table,
+        project="data-warehouse-369301",
+        job_config=LoadJobConfig(write_disposition="WRITE_APPEND"),
+    ).result()
+    return job.state
 
 
 def get_product_df(sales_df: pd.DataFrame, training_info: pd.DataFrame) -> pd.DataFrame:
@@ -101,24 +100,25 @@ def combine_product_target_and_category_for_P03_P04(
     # explode 可以將該類別資料分離,而我們合併所有資料,只取第一筆 30600041 這筆即可
     product_attr = (
         training_info[["product_id_combo"]]
-        .assign(product_id=lambda df: df["product_id_combo"].str.split("/"))
-        .explode("product_id")
+        .assign(sku=lambda df: df["product_id_combo"].str.split("/"))
+        .explode("sku")
         .merge(training_info[["product_id_combo", "brand"]], on="product_id_combo")
-        .merge(categories_df, on="product_id")
+        .merge(categories_df, on="sku")
         .assign(
             first_ind=lambda df: df.groupby("product_id_combo")[
                 "product_id_combo"
             ].shift(1),
         )
         .loc[lambda df: df["first_ind"].isna(), :]
-        .drop(columns=["product_id", "first_ind"])
+        .drop(columns=["sku", "first_ind"])
         .assign(
             cat_code_3=lambda df: np.where(
-                df["cat_code_3"] == "無小分類", "", df["cat_code_3"],
+                df["product_category_3"] == "無小分類", "", df["product_category_3"],
             ),
         )
     )
     return product_attr
+
 
 def get_p02_training_target() -> pd.DataFrame:
     """
@@ -143,44 +143,46 @@ def get_p02_training_target() -> pd.DataFrame:
     )
 
 
-def get_test_data_for_reference(test_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    將測試資料表格化並整理成可供比較的格式.
-
-    Args:
-    ----
-        test_df (pd.DataFrame): 測試資料
-
-    Returns:
-    -------
-        pd.DataFrame: 測試資料的整理表格
-    """
-    # 只取前六個預測目標
-    error_cols = [
-        "sales_error1",
-        "sales_error2",
-        "sales_error3",
-        "sales_error4",
-        "sales_error5",
-        "sales_error6",
-    ]
+def get_test_data_for_reference(test_df: pd.DataFrame, _cols: str="error") -> pd.DataFrame:
+    """將測試資料表格化並整理成可供比較的格式."""
+    if _cols == "error":
+        # 只取前六個預測目標
+        assign_feature = "sales_errors"
+        assign_cols = [
+            "sales_error1",
+            "sales_error2",
+            "sales_error3",
+            "sales_error4",
+            "sales_error5",
+            "sales_error6",
+        ]
+    else:
+        assign_feature = "sales"
+        assign_cols = [
+            "sales_future1",
+            "sales_future2",
+            "sales_future3",
+            "sales_future4",
+            "sales_future5",
+            "sales_future6",
+        ]
 
     melt_table = pd.melt(
         test_df,
         id_vars=["product_id_combo"],
-        value_vars=error_cols,
+        value_vars=assign_cols,
         ignore_index=False,
     ).reset_index()
 
-    for idx, col in enumerate(error_cols):
+    for idx, col in enumerate(assign_cols):
         melt_table.loc[lambda df: df['variable']==col, 'variable'] = ( # noqa
-            melt_table["date"] + pd.DateOffset(months=idx+1))
+            melt_table["date"] + pd.DateOffset(months=idx))
 
     melt_table = (
         melt_table.rename(
-        columns={"date":"predicted_on_date", "variable": "date", "value": "sales_errors"})
+        columns={"date":"predicted_on_date", "variable": "date", "value": assign_feature})
         .assign(
-            M=lambda df: pd.to_datetime(df["date"]).dt.to_period("M").astype(int)
+            M=lambda df: pd.to_datetime(df["date"]).dt.to_period("M").astype(int)+1
             - df["predicted_on_date"].dt.to_period("M").astype(int),
             date=lambda df: pd.to_datetime(df["date"]))
     )
@@ -188,17 +190,7 @@ def get_test_data_for_reference(test_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_mae_diff(melt_table: pd.DataFrame) -> pd.DataFrame:
-    """
-    比較模型與業務預估誤差,暫定用 +- 10% 來做可參考範圍.
-
-    Args:
-    ----
-        melt_table (pd.DataFrame): 測試資料的整理表格
-
-    Returns:
-    -------
-        pd.DataFrame: 包含比較結果的表格
-    """
+    """比較模型與業務預估誤差,暫定用 +- 10% 來做可參考範圍."""
     calculate_df = melt_table.copy()
     calculate_df["AE_model"] = calculate_df["sales_errors"].abs()
     calculate_df["AE_agent"] = (calculate_df["sales_agent"] - calculate_df["sales"]).abs()
@@ -216,26 +208,86 @@ def get_mae_diff(melt_table: pd.DataFrame) -> pd.DataFrame:
     return mae
 
 
-
-def reference_data_to_sql(mae_df: pd.DataFrame, db_table: str, department_code: str) -> None:
+def test_data_to_bq(
+    test_df: pd.DataFrame,
+    bq_table: str,
+    department_code: str,
+    bigquery_client: BigQueryClient,
+) -> str:
+    """將測試資料比較結果存到資料庫."""
+    model_version = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-%d")
+    test_df.insert(0, "month_version", model_version)
+    test_df.insert(1, "dep_code", f"{department_code}00")
+    test_df_cols = [
+        "month_version",
+        "dep_code",
+        "brand",
+        "product_category_1",
+        "product_category_2",
+        "product_category_3",
+        "product_id_combo",
+        "product_name",
+        "date",
+        "predicted_on_date",
+        "M",
+        "sales",
+        "sales_model",
+        "sales_agent",
+        "less_likely_lb",
+        "likely_lb",
+        "likely_ub",
+        "less_likely_ub",
+        "positive_ind_likely",
+        "positive_ind_less_likely",
+    ]
+    query_parameters = [
+            ScalarQueryParameter("model_version", "STRING", model_version),
+        ]
+    delete_query = """
+        DELETE FROM DS.ds_p03_model_testing
+        WHERE month_version = @model_version
     """
-    將測試資料比較結果存到資料庫.
+    bigquery_client.query(
+        delete_query,
+        job_config=QueryJobConfig(query_parameters=query_parameters),
+    ).result()
+    job = bigquery_client.load_table_from_dataframe(
+        dataframe=test_df[test_df_cols],
+        destination=bq_table,
+        project="data-warehouse-369301",
+        job_config=LoadJobConfig(write_disposition="WRITE_APPEND"),
+    ).result()
+    return job.state
 
-    Args:
-    ----
-        mae_df (pd.DataFrame): 包含比較結果的表格
-        db_table (str): 資料庫表名稱
-        department_code (str): 部門代碼
 
-    Returns:
-    -------
-        None
-    """
-    model_version = pendulum.now(tz="Asia/Taipei").strftime("%Y-%m-%d")
+def reference_data_to_bq(
+    mae_df: pd.DataFrame,
+    bq_table: str,
+    department_code: str,
+    bigquery_client: BigQueryClient,
+) -> None:
+    """將 reference 資料比較結果存到資料庫."""
+    model_version = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-%d")
     mae_df.insert(0, "month_version", model_version)
     mae_df["department_code"] = f"{department_code}00"
-    with ct.connect_to_mssql("hlh_psi") as conn:
-        mae_df.to_sql(name=db_table, con=conn, if_exists="append", index=False)
+    query_parameters = [
+            ScalarQueryParameter("model_version", "STRING", model_version),
+        ]
+    delete_query = """
+        DELETE FROM DS.ds_p03_model_referenceable
+        WHERE month_version = @model_version
+    """
+    bigquery_client.query(
+        delete_query,
+        job_config=QueryJobConfig(query_parameters=query_parameters),
+    ).result()
+    job = bigquery_client.load_table_from_dataframe(
+        dataframe=mae_df,
+        destination=bq_table,
+        project="data-warehouse-369301",
+        job_config=LoadJobConfig(write_disposition="WRITE_APPEND"),
+    ).result()
+    return job.state
 
 
 def get_time_tag(transaction_df: pd.DataFrame, datetime_col: str, time_feature: str) -> pd.DataFrame:

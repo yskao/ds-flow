@@ -18,6 +18,8 @@ lifetimes = "*"
 xgboost = "*"
 scikit-learn = "*"
 statsmodels = "*"
+pygsheets = "*"
+tqdm = "*"
 
 [dev-packages]
 flake8 = "*"
