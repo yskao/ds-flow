@@ -9,10 +9,14 @@ from mllib.ml_utils import (
     get_mae_diff,
     get_test_data_for_reference,
     predict_data_to_bq,
-    #reference_data_to_sql,
+    reference_data_to_bq,
     test_data_to_bq,
 )
-from mllib.sql_script import create_p03_model_predict, create_p03_model_testing
+from mllib.sql_script import (
+    create_p03_model_predict,
+    create_p03_model_referenceable,
+    create_p03_model_testing,
+)
 from prefect import flow, get_run_logger, task
 
 from utils.gcp.client import get_bigquery_client
@@ -36,9 +40,9 @@ def create_p03_model_predict_table(bigquery_client: BigQueryClient) -> None:
 
 
 @task(name="create_p03_model_referenceable_table")
-def create_p03_model_referenceable_table(bq_query: str, bigquery_client: BigQueryClient) -> None:
+def create_p03_model_referenceable_table(bigquery_client: BigQueryClient) -> None:
     """Create DS.p03_model_referenceable."""
-    bigquery_client.query(bq_query).result()
+    bigquery_client.query(create_p03_model_referenceable()).result()
 
 
 @task(name="prepare training data")
@@ -150,7 +154,7 @@ def generate_reference_table(
         .merge(train_df, on=["date", "product_id_combo"], how="left")
     )
     combined_df["sales_agent"] = combined_df["sales_agent"].fillna(0)
-    mae_df = get_mae_diff(combined_df)[["product_id_combo","bound_0.1_flag"]]
+    mae_df = get_mae_diff(combined_df)[["product_id_combo","bound_01_flag"]]
     brand_df = train_df[["product_id_combo", "brand"]].drop_duplicates()
     return mae_df.merge(brand_df, how="left", on="product_id_combo")
 
@@ -201,16 +205,21 @@ def store_predictions_to_bq(
     )
 
 
-# @task(name="store reference to bq")
-# def store_references_to_bq(
-#     mae_df: pd.DataFrame,
-#     db_table: str,
-#     department_code: str,
-#     bigquery_client: BigQueryClient,
-# ) -> None:
-#     """將「高參考-低參考」表存儲到數據庫中。."""
-#     # 計算好的高參考低參考資料存入 psi.f_model_referenceable
-#     reference_data_to_bq(
+@task(name="store reference to bq")
+def store_references_to_bq(
+    mae_df: pd.DataFrame,
+    bq_table: str,
+    department_code: str,
+    bigquery_client: BigQueryClient,
+) -> None:
+    """將「高參考-低參考」表存儲到數據庫中。."""
+    # 計算好的高參考低參考資料存入 psi.f_model_referenceable
+    reference_data_to_bq(
+        mae_df=mae_df,
+        bq_table=bq_table,
+        department_code=department_code,
+        bigquery_client=bigquery_client,
+    )
 
 
 @flow(name=generate_flow_name())
@@ -225,6 +234,8 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
         create_p03_model_predict_table(bigquery_client)
         logging.info("create_p03_model_testing_table ...")
         create_p03_model_testing_table(bigquery_client)
+        logging.info("create_p03_model_referenceable_table ...")
+        create_p03_model_referenceable_table(bigquery_client)
 
     # start_date 從 2020-01-01 開始
     train_df = prepare_training_data(
@@ -245,7 +256,7 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
         train_df=train_df,
         bigquery_client=bigquery_client,
     )
-    generate_reference_table(
+    reference_df = generate_reference_table(
         model=forecast_model,
         target_time=end_date,
         train_df=train_df,
@@ -264,8 +275,13 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
         department_code=dep_code,
         bigquery_client=bigquery_client,
     )
-    # store_references_to_sql(
+    store_references_to_bq(
+        mae_df=reference_df,
+        bq_table="DS.ds_p03_model_referenceable",
+        department_code=dep_code,
+        bigquery_client=bigquery_client,
+    )
 
 
 if __name__ == "__main__":
-    mlops_sales_dep3_forecasting_flow(True)
+    mlops_sales_dep3_forecasting_flow(False)

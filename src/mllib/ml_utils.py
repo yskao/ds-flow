@@ -16,7 +16,7 @@ def predict_data_to_bq(
         bq_table: str,
         department_code: str,
         bigquery_client: BigQueryClient,
-) -> None:
+) -> str:
     """將預測資料存到資料庫."""
     predict_df_cols = [
         "month_version",
@@ -200,7 +200,7 @@ def get_mae_diff(melt_table: pd.DataFrame) -> pd.DataFrame:
         mae['bound_'+str(percent_diff)] = mae.apply(lambda x: {'ub': x['AE_agent']*(1+percent_diff), 'lb': x['AE_agent']*(1-percent_diff)} ,axis=1) # noqa
 
     for percent_diff in [_/10 for _ in range(1,10)]:
-        mae["bound_"+str(percent_diff)+"_flag"] =  (
+        mae["bound_"+str(str(int(percent_diff*10)).zfill(2))+"_flag"] =  (
             mae.apply(lambda x: '低參考' if x['AE_model'] > x['bound_'+str(percent_diff)]['ub']  # noqa
                       else ('高參考' if x['AE_model'] < x['bound_'+str(percent_diff)]['lb'] else '可參考'  # noqa
                             ) ,axis=1)
@@ -265,11 +265,11 @@ def reference_data_to_bq(
     bq_table: str,
     department_code: str,
     bigquery_client: BigQueryClient,
-) -> None:
+) -> str:
     """將 reference 資料比較結果存到資料庫."""
     model_version = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-%d")
     mae_df.insert(0, "month_version", model_version)
-    mae_df["department_code"] = f"{department_code}00"
+    mae_df["dep_code"] = f"{department_code}00"
     query_parameters = [
             ScalarQueryParameter("model_version", "STRING", model_version),
         ]

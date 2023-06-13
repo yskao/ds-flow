@@ -294,3 +294,17 @@ def create_p03_model_predict():
         )
     """
     return bq_query
+
+
+def create_p03_model_referenceable():
+    """Create DS.ds_p03_model_referenceable."""
+    bq_query = """
+        CREATE OR REPLACE TABLE DS.ds_p03_model_referenceable (
+            month_version STRING OPTIONS(description="模型版本"),
+            product_id_combo STRING OPTIONS(description="產品名稱組合"),
+            bound_01_flag STRING OPTIONS(description="參考性"),
+            brand STRING OPTIONS(description="品牌"),
+            dep_code STRING OPTIONS(description="部門代號"),
+        )
+    """
+    return bq_query
