@@ -12,7 +12,7 @@ from mllib.data_engineering import (
 )
 from mllib.data_extraction import ExtractDataForTraining
 from mllib.repurchase.hlh_repurchase import HLHRepurchase
-from mllib.sql_script import cdp_soda_stream_sql
+from mllib.sql_query.soda_stream_repurchase_script import cdp_soda_stream_sql
 from prefect import flow, get_run_logger, task
 
 from utils.gcp.client import get_bigquery_client

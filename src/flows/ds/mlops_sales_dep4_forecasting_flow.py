@@ -5,7 +5,7 @@ import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
 from mllib.data_transform import TransformDataForTraining
 from mllib.hlh_ml_forecast import HLHMLForecast
-from mllib.ml_utils.sales_forecasting_dep3_utils import (
+from mllib.ml_utils.sales_forecasting_dep4_utils import (
     predict_data_to_bq,
     reference_data_to_bq,
     test_data_to_bq,
@@ -14,10 +14,10 @@ from mllib.ml_utils.utils import (
     get_mae_diff,
     get_test_data_for_reference,
 )
-from mllib.sql_query.sales_forecasting_p03_script import (
-    create_p03_model_predict,
-    create_p03_model_referenceable,
-    create_p03_model_testing,
+from mllib.sql_query.sales_forecasting_p04_script import (
+    create_p04_model_predict,
+    create_p04_model_referenceable,
+    create_p04_model_testing,
 )
 from prefect import flow, get_run_logger, task
 
@@ -25,26 +25,26 @@ from utils.gcp.client import get_bigquery_client
 from utils.prefect import generate_flow_name
 
 Predictor = TypeVar("Predictor")
-dep_code = "P03"
+dep_code = "P04"
 trans_model = TransformDataForTraining(department_code=dep_code)
 
 
-@task(name="create_p03_model_testing_table")
-def create_p03_model_testing_table(bigquery_client: BigQueryClient) -> None:
-    """Create DS.p03_model_testing."""
-    bigquery_client.query(create_p03_model_testing()).result()
+@task(name="create_p04_model_testing_table")
+def create_p04_model_testing_table(bigquery_client: BigQueryClient) -> None:
+    """Create DS.p04_model_testing."""
+    bigquery_client.query(create_p04_model_testing()).result()
 
 
-@task(name="create_p03_model_predict_table")
-def create_p03_model_predict_table(bigquery_client: BigQueryClient) -> None:
-    """Create DS.p03_model_predict."""
-    bigquery_client.query(create_p03_model_predict()).result()
+@task(name="create_p04_model_predict_table")
+def create_p04_model_predict_table(bigquery_client: BigQueryClient) -> None:
+    """Create DS.p04_model_predict."""
+    bigquery_client.query(create_p04_model_predict()).result()
 
 
-@task(name="create_p03_model_referenceable_table")
-def create_p03_model_referenceable_table(bigquery_client: BigQueryClient) -> None:
-    """Create DS.p03_model_referenceable."""
-    bigquery_client.query(create_p03_model_referenceable()).result()
+@task(name="create_p04_model_referenceable_table")
+def create_p04_model_referenceable_table(bigquery_client: BigQueryClient) -> None:
+    """Create DS.p04_model_referenceable."""
+    bigquery_client.query(create_p04_model_referenceable()).result()
 
 
 @task(name="prepare training data")
@@ -225,23 +225,23 @@ def store_references_to_bq(
 
 
 @flow(name=generate_flow_name())
-def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
+def mlops_sales_dep4_forecasting_flow(init: bool=False) -> None:
 
     logging = logging = get_run_logger()
     bigquery_client = get_bigquery_client()
     end_date = pd.Timestamp.now("Asia/Taipei").tz_localize(None).strftime("%Y-%m-%d")
 
     if init:
-        logging.info("create_p03_model_predict_table ...")
-        create_p03_model_predict_table(bigquery_client)
-        logging.info("create_p03_model_testing_table ...")
-        create_p03_model_testing_table(bigquery_client)
-        logging.info("create_p03_model_referenceable_table ...")
-        create_p03_model_referenceable_table(bigquery_client)
+        logging.info("create_p04_model_predict_table ...")
+        create_p04_model_predict_table(bigquery_client)
+        logging.info("create_p04_model_testing_table ...")
+        create_p04_model_testing_table(bigquery_client)
+        logging.info("create_p04_model_referenceable_table ...")
+        create_p04_model_referenceable_table(bigquery_client)
 
     # start_date 從 2020-01-01 開始
     train_df = prepare_training_data(
-        start_date="2020-01-01",
+        start_date="2021-08-01",
         end_date=end_date,
         bigquery_client=bigquery_client,
     )
@@ -266,24 +266,24 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
     )
     store_test_to_bq(
         test_df=test_df,
-        bq_table="DS.ds_p03_model_testing",
+        bq_table="DS.ds_p04_model_testing",
         department_code=dep_code,
         bigquery_client=bigquery_client,
     )
     store_predictions_to_bq(
         train_df=train_df,
         predict_df=predict_df,
-        bq_table="DS.ds_p03_model_predict",
+        bq_table="DS.ds_p04_model_predict",
         department_code=dep_code,
         bigquery_client=bigquery_client,
     )
     store_references_to_bq(
         mae_df=reference_df,
-        bq_table="DS.ds_p03_model_referenceable",
+        bq_table="DS.ds_p04_model_referenceable",
         department_code=dep_code,
         bigquery_client=bigquery_client,
     )
 
 
 if __name__ == "__main__":
-    mlops_sales_dep3_forecasting_flow(False)
+    mlops_sales_dep4_forecasting_flow(False)

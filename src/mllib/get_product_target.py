@@ -1,7 +1,7 @@
 import pandas as pd
 
 from mllib.data_extraction import ExtractDataForTraining
-from mllib.ml_utils import (
+from mllib.ml_utils.utils import (
     combine_product_target_and_category_for_P03_P04,
     get_p02_training_target,
     get_product_df,

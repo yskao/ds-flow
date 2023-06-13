@@ -6,7 +6,7 @@ from dateutil.relativedelta import relativedelta
 from google.cloud.bigquery import Client as BigQueryClient
 from google.cloud.bigquery import QueryJobConfig, ScalarQueryParameter
 
-from mllib.sql_script import CylinderSQL
+from mllib.sql_query.soda_stream_repurchase_script import CylinderSQL
 
 
 class ExtractDataForTraining:
