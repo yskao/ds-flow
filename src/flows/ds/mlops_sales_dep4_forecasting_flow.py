@@ -241,7 +241,7 @@ def mlops_sales_dep4_forecasting_flow(init: bool=False) -> None:
 
     # start_date 從 2020-01-01 開始
     train_df = prepare_training_data(
-        start_date="2021-08-01",
+        start_date="2020-01-01",
         end_date=end_date,
         bigquery_client=bigquery_client,
     )
