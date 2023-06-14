@@ -30,6 +30,9 @@ isort = "*"
 ipython = "*"
 pre-commit = "*"
 ipykernel = "*"
+great-expectations = "*"
+pytest = "*"
+pytest-mock = "*"
 
 [requires]
 python_version = "3.11"
