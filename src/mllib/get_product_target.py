@@ -17,7 +17,6 @@ class GetProductTargetForP02(ExtractDataForTraining):
 
 
     def get_output_df(self, sales_df: pd.DataFrame, training_info: pd.DataFrame, category_df: pd.DataFrame) -> pd.DataFrame:
-
         product_df = get_product_df(
             sales_df=sales_df,
             training_info=training_info,
@@ -28,8 +27,6 @@ class GetProductTargetForP02(ExtractDataForTraining):
 
 
 class GetProductTargetForP03P04(ExtractDataForTraining):
-
-
     def __init__(self, department_code: str) -> None:
         error_msg = "department_code must be P04, P03"
         if department_code in ["P04", "P03"]:
@@ -69,8 +66,3 @@ class GetProductTargetForP03P04(ExtractDataForTraining):
         )
         output_df = product_df.merge(product_attr, how="left", on="product_id_combo")
         return output_df
-
-
-if __name__ == "__main__":
-    training_target = GetProductTargetForP02()
-    training_info = training_target.get_training_target()

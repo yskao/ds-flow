@@ -65,14 +65,3 @@ class  TransformDataForTraining:
         # 根據資料時間設定權重
         transformed_df = set_training_weight(output_df)
         return transformed_df
-
-
-if __name__ == "__main__":
-    from utils.gcp.client import get_bigquery_client
-    bigquery_client = get_bigquery_client()
-    trans_model = TransformDataForTraining(department_code="P02")
-    result = trans_model.get_transformed_training_data(
-        start_date="2023-01-01",
-        end_date="2023-03-31",
-        bigquery_client=bigquery_client,
-    )

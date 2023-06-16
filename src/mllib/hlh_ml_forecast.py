@@ -9,7 +9,7 @@ from mllib.data_engineering import shift_all_product_id_data
 
 
 class HLHMLForecast:
-    """用於銷售預測功能。使用者需要提供訓練數據,並可以根據需要指定超參數進行訓練和預測。."""
+    """用於銷售預測功能。使用者需要提供訓練數據,並可以根據需要指定超參數進行訓練和預測."""
 
     def __init__(
         self,
@@ -73,7 +73,6 @@ class HLHMLForecast:
         )
 
 
-
     def predict(self, x: pd.DataFrame) -> np.array:
         """模型預測結果."""
         return self.model.predict(x)
@@ -84,8 +83,8 @@ class HLHMLForecast:
         return forecast_df.assign(
             less_likely_lb=forecast_df[target]*0.15,
             likely_lb=forecast_df[target]*0.25,
-            likely_ub=forecast_df[target]*(np.random.random(1)+1),
-            less_likely_ub=forecast_df[target]*(np.random.random(1)+2),
+            likely_ub=forecast_df[target]*1.25,
+            less_likely_ub=forecast_df[target]*2,
           )
 
 
