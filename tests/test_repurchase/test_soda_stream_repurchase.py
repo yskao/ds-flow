@@ -1,9 +1,11 @@
+import numpy as np
 import pandas as pd
 from mllib.data_engineering import (
     gen_dummies,
     gen_repurchase_train_and_test_df,
     remove_english_symbol_for_series,
 )
+from mllib.repurchase.hlh_repurchase import HLHRepurchase
 
 source_map = {
     "HS-91APP": [0, 0, 1],
@@ -15,8 +17,16 @@ source_map = {
 class TestSodaStreamRepurchase:
     """test soda stream prediction."""
 
-    def test_prepare_training_data(self, soda_stream_repurchase_data):
+    def test_prepare_training_data(
+            self,
+            soda_stream_repurchase_data,
+            soda_stream_repurchase_data_train_df_test_df,
+            soda_stream_repurchase_data_seasonal_train_df_test_df,
+    ):
         data = soda_stream_repurchase_data
+        expected_train_df, expected_pred_df = soda_stream_repurchase_data_train_df_test_df
+        expected_train_seasonal_df, expected_pred_seasonal_df = (
+            soda_stream_repurchase_data_seasonal_train_df_test_df)
         correct_mobile_index = remove_english_symbol_for_series(data["mobile"]).index
         orders_df = data.loc[correct_mobile_index]
         dummy = gen_dummies(orders_df["data_source"], mapping_dict=source_map)
@@ -58,7 +68,32 @@ class TestSodaStreamRepurchase:
         pred_df["mobile"] = pred_df["mobile"].astype("category")
         train_seasonal_df["mobile"] = train_seasonal_df["mobile"].astype("category")
         pred_seasonal_df["mobile"] = pred_seasonal_df["mobile"].astype("category")
-        train_df.to_csv("/Users/samkao/sam/ds-flow/tests/test_data/test_soda_stream_repurchase/train_df.csv", index=False)
-        pred_df.to_csv("/Users/samkao/sam/ds-flow/tests/test_data/test_soda_stream_repurchase/pred_df.csv", index=False)
-        train_seasonal_df.to_csv("/Users/samkao/sam/ds-flow/tests/test_data/test_soda_stream_repurchase/train_seasonal_df.csv", index=False)
-        pred_seasonal_df.to_csv("/Users/samkao/sam/ds-flow/tests/test_data/test_soda_stream_repurchase/pred_seasonal_df.csv", index=False)
+
+        assert all(train_df == expected_train_df)
+        assert all(pred_df == expected_pred_df)
+        assert all(train_seasonal_df == expected_train_seasonal_df)
+        assert all(pred_seasonal_df == expected_pred_seasonal_df)
+
+
+    def test_train_and_predict_model(
+        self,
+        soda_stream_repurchase_data_train_df_test_df,
+        soda_stream_repurchase_data_predictions,
+    ):
+        train_df, pred_df = soda_stream_repurchase_data_train_df_test_df
+        ml_model = HLHRepurchase(
+            n_days=120,
+            method="ml",
+        )
+        ml_model.fit(
+            train_df.drop(["last_date", "assess_date"], axis=1),
+            target="repurchase_120_flag",
+        )
+        assert ml_model is not None
+
+        predictions = pd.DataFrame(
+                ml_model.repurchase_predict(pred_df),
+                columns=ml_model.repurchase_model.clf_model.classes_,
+            ).round(4)[1.0]
+        assert np.allclose(predictions, soda_stream_repurchase_data_predictions)
+    # def test_bg_model(self):

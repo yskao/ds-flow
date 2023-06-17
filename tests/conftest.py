@@ -63,3 +63,36 @@ def soda_stream_repurchase_data():
     data = pd.read_csv(
         data_path, parse_dates=["order_date"], dtype={"product_category_id_2": "str", "mobile": "category"})
     return data
+
+
+@pytest.fixture()
+def soda_stream_repurchase_data_train_df_test_df():
+    data_path_train_df = Path().resolve().joinpath(
+        "tests/test_data/test_soda_stream_repurchase/train_df.csv")
+    data_path_pred_df = Path().resolve().joinpath(
+        "tests/test_data/test_soda_stream_repurchase/pred_df.csv")
+    train_df = pd.read_csv(
+        data_path_train_df, parse_dates=["last_date"], dtype={"mobile": "category"})
+    pred_df = pd.read_csv(
+        data_path_pred_df, parse_dates=["last_date"], dtype={"mobile": "category"})
+    return train_df, pred_df
+
+
+@pytest.fixture()
+def soda_stream_repurchase_data_seasonal_train_df_test_df():
+    data_path_train_seasonal_df = Path().resolve().joinpath(
+        "tests/test_data/test_soda_stream_repurchase/train_seasonal_df.csv")
+    data_path_pred_seasonal_df = Path().resolve().joinpath(
+        "tests/test_data/test_soda_stream_repurchase/pred_seasonal_df.csv")
+    train_seasonal_df = pd.read_csv(
+        data_path_train_seasonal_df, parse_dates=["last_date"], dtype={"mobile": "category"})
+    pred_seasonal_df = pd.read_csv(
+        data_path_pred_seasonal_df, parse_dates=["last_date"], dtype={"mobile": "category"})
+    return train_seasonal_df, pred_seasonal_df
+
+
+@pytest.fixture()
+def soda_stream_repurchase_data_predictions():
+    data_path = Path().resolve().joinpath(
+        "tests/test_data/test_soda_stream_repurchase/soda_stream_repurchase_predictions.csv")
+    return pd.read_csv(data_path, dtype={"1": float})
