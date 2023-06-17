@@ -121,14 +121,17 @@ class HLHRepurchase:
         self.repurchase_model = self._get_classifier(method=method)
 
 
-    def fit(self, train_df: pd.DataFrame, target: str) -> None:
+    def fit(self, train_df: pd.DataFrame, target: str | None = None) -> None:
         """
         訓練客戶回購模型。.
 
         參數:
             train_df (pd.DataFrame): 訓練數據,包含客戶特徵和標籤
         """
-        self.repurchase_model._fit(train_df=train_df, target=target)
+        if target:
+            self.repurchase_model._fit(train_df=train_df, target=target)
+        else:
+            self.repurchase_model._fit(train_df=train_df)
 
 
     def repurchase_predict(self, test_df: pd.DataFrame) -> pd.Series:

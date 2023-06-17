@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 from mllib.data_engineering import (
     gen_dummies,
@@ -95,5 +94,26 @@ class TestSodaStreamRepurchase:
                 ml_model.repurchase_predict(pred_df),
                 columns=ml_model.repurchase_model.clf_model.classes_,
             ).round(4)[1.0]
-        assert np.allclose(predictions, soda_stream_repurchase_data_predictions)
-    # def test_bg_model(self):
+        assert all(predictions == soda_stream_repurchase_data_predictions["1"])
+
+        feature_imp = ml_model.repurchase_model._get_feature_importance()
+        expected_cols_len = train_df.drop(["last_date", "assess_date", "repurchase_120_flag"], axis=1).columns.nunique()
+        assert len(feature_imp["feature"]) == expected_cols_len
+        training_eval = ml_model.repurchase_model._get_training_evaluation()
+        assert isinstance(training_eval, float)
+
+
+    def test_bg_model(
+        self,
+        soda_stream_repurchase_data_train_df_test_df,
+    ):
+        train_df, pred_df = soda_stream_repurchase_data_train_df_test_df
+        ml_model = HLHRepurchase(
+            n_days=120,
+            method="bg",
+        )
+        ml_model.fit(train_df)
+        assert ml_model  is not None
+
+        predictions = ml_model.repurchase_predict(test_df=pred_df)
+        assert len(predictions) == len(pred_df)

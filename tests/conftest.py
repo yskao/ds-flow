@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -95,4 +96,4 @@ def soda_stream_repurchase_data_seasonal_train_df_test_df():
 def soda_stream_repurchase_data_predictions():
     data_path = Path().resolve().joinpath(
         "tests/test_data/test_soda_stream_repurchase/soda_stream_repurchase_predictions.csv")
-    return pd.read_csv(data_path, dtype={"1": float})
+    return pd.read_csv(data_path, dtype={"1": np.float32})

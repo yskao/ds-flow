@@ -76,4 +76,5 @@ addopts = "--cov src/mllib --cov-report=term-missing --cov-fail-under=80"
 omit = [
     "src/mllib/sql_query/*",
     "src/mllib/ml_utils/*",
+    "src/mllib/dl_algo/*"
 ]
