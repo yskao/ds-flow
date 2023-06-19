@@ -102,7 +102,7 @@ def prepare_training_data(bigquery_client: BigQueryClient, assess_date: pd.Times
         orders_df
         .assign(order_date=lambda df: df["order_date"].dt.to_period("D"))
         .groupby("mobile", as_index=False)["order_date"].nunique()
-        .query("order_date >= 2") # 兩次消費以上才會納入計算
+        .query("order_date > 2")
         ["mobile"]
     )
     orders_correct_df = orders_df[orders_df["mobile"].isin(match_mobile)]
