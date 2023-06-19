@@ -1,0 +1,208 @@
+
+import pandas as pd
+from pydantic import BaseModel
+
+
+class DepartmentSettings(BaseModel):
+    department_code: str
+    full_department_code: str
+    department_chinese: str
+    setting_sheet_url: dict[int, str]
+    template_sheet_url: dict[int, str]
+
+
+DEPARTMENT_SETTINGS_MAP = {
+    3: DepartmentSettings(
+        department_code="P03",
+        full_department_code="P0300",
+        department_chinese="三處",
+        setting_sheet_url={
+            2022: "https://docs.google.com/spreadsheets/d/1IqKsnxKGnINZK7mLzHyZg1ZPe6oNDhaIU8vB3iVPPt0",
+            2023: "https://docs.google.com/spreadsheets/d/1olcPGNF3J3DVkWhoxTouaE-HkG89tdfOGDcXBiNJ8vU",
+        },
+        template_sheet_url={
+            2022: "https://docs.google.com/spreadsheets/d/1lfvAZVLuem2SSHKctSPryz2wyvfQAPIVHLg8_5P7iZU",
+            2023: "https://docs.google.com/spreadsheets/d/1_gZz57gUU5RLL194oRIl-xpDQRR1RX1SoeNArnjVI24",
+        },
+    ),
+    4: DepartmentSettings(
+        department_code="P04",
+        full_department_code="P0400",
+        department_chinese="四處",
+        setting_sheet_url={
+            2022: "https://docs.google.com/spreadsheets/d/1NQciqMjpKGX2NInGrYgrqYNEwYa3jY_zdVIxiRQZF6A",
+            2023: "https://docs.google.com/spreadsheets/d/1aWGO5pNDF6TA15wneeDk7POyqJcfBE6nXlMFlDXNboM",
+        },
+        template_sheet_url={
+            2022: "https://docs.google.com/spreadsheets/d/1zcNgBEkRqhnpWWp60gblz-8CjqQWlU2g4FzCogo1JGM",
+            2023: "https://docs.google.com/spreadsheets/d/1Zn6qWvqb4HEJTEvixlVNb6WcUcxkrbewPC2B2WJkP98",
+        },
+    ),
+}
+
+
+TABLE_NAME_DICT = {
+    "gsheets_info": "f_gsheets_info",
+    "sales": {
+        "forecast_hist": "f_sales_forecast_hist",
+        "forecast": "f_sales_forecast",
+        "forecast_versions": "f_sales_forecast_versions",
+        "realized": "f_sales",
+        "realized_agent": "f_agent_sales",
+        "develop": "f_sales_develop",
+    },
+    "transfer": {
+        "forecast_hist": "f_transfer_forecast_hist",
+        "forecast": "f_transfer_forecast",
+        "forecast_versions": "f_transfer_forecast_versions",
+        "realized": "f_transfer",
+        "develop": "f_transfer_develop",
+    },
+    "inventory": {
+        "forecast_hist": "f_inventory_forecast_hist",
+        "forecast": "f_inventory_forecast",
+        "forecast_versions": "f_inventory_forecast_versions",
+        "realized": "f_inventory",
+        "develop": "f_inventory_develop",
+    },
+    "purchase": {
+        "forecast_hist": "f_purchase_forecast_hist",
+        "forecast": "f_purchase_forecast",
+        "forecast_versions": "f_purchase_forecast_versions",
+        "realized": "f_purchase",
+        "develop": "f_purchase_develop",
+    },
+    "dimensions": {
+        "product_code": "d_product_code_customized",
+        "channel": "d_channel_mapping_customized",
+    },
+    "model": {"test_data": "f_model_testing", "predict_data": "f_model_predict"},
+}
+
+PSI_ROW_NAME_DICT = {
+    3: {
+        "原廠訂單": "P",
+        "去年同期實銷": "",
+        "Total(調撥+實銷)": "S",
+        "新零售調撥": "S",
+        "他處調撥": "S",
+        "三處實銷/預估": "S",
+        "網路": "S",
+        "藥美妝": "S",
+        "量販": "S",
+        "COSTCO": "S",
+        "3C": "S",
+        "其他通路": "S",
+        "預估不足數量": "I",
+        "當日庫存": "I",
+        "庫存-01倉": "I",
+        "庫存-其他倉": "I",
+        "Total(全倉)": "I",
+    },
+    4: {
+        "原廠訂單": "P",
+        "去年同期實銷": "",
+        "Total(調撥+實銷)": "S",
+        "新零售調撥": "S",
+        "他處調撥": "S",
+        "四處實銷/預估": "S",
+        "網路": "S",
+        "TV購物": "S",
+        "量販": "S",
+        "COSTCO": "S",
+        "3C": "S",
+        "其他通路": "S",
+        "預估不足數量": "I",
+        "庫存-01倉": "I",
+        "庫存-其他倉": "I",
+        "Total(全倉)": "I",
+    },
+}
+
+P03_WAREHOUSE_DF = pd.DataFrame([
+    {"warehouse_code": "PBA300", "customer_code": "S00200000", "channel": "其他通路", "brand": "ALL", "sales": "陳信儒", "sales_code": "1550"},
+    {"warehouse_code": "PH4300", "customer_code": "T00400000", "channel": "其他通路", "brand": "ALL", "sales": "陳信儒", "sales_code": "1550"},
+    {"warehouse_code": "PH8300", "customer_code": "T00200010", "channel": "其他通路", "brand": "ALL", "sales": "陳信儒", "sales_code": "1550"},
+    {"warehouse_code": "PG1301", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1302", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1303", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1304", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1305", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1306", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1307", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1308", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1309", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1310", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1311", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1312", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1313", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG1314", "customer_code": "H0020000F", "channel": "COSTCO", "brand": "ALL", "sales": "王志騰", "sales_code": "1501"},
+    {"warehouse_code": "PG2301", "customer_code": "L0010000D", "channel": "量販", "brand": "ALL", "sales": "張鈞昊", "sales_code": "1642"},
+    {"warehouse_code": "PG2302", "customer_code": "L0010000D", "channel": "量販", "brand": "ALL", "sales": "張鈞昊", "sales_code": "1642"},
+    {"warehouse_code": "PG2303", "customer_code": "L0010000D", "channel": "量販", "brand": "ALL", "sales": "張鈞昊", "sales_code": "1642"},
+    {"warehouse_code": "PG2304", "customer_code": "L0010000D", "channel": "量販", "brand": "ALL", "sales": "張鈞昊", "sales_code": "1642"},
+    {"warehouse_code": "PG2305", "customer_code": "L0010000D", "channel": "量販", "brand": "ALL", "sales": "張鈞昊", "sales_code": "1642"},
+    {"warehouse_code": "PG2306", "customer_code": "L0010000D", "channel": "量販", "brand": "ALL", "sales": "張鈞昊", "sales_code": "1642"},
+    {"warehouse_code": "PG2307", "customer_code": "L0010000D", "channel": "量販", "brand": "ALL", "sales": "張鈞昊", "sales_code": "1642"},
+    {"warehouse_code": "PG2308", "customer_code": "L0010000D", "channel": "量販", "brand": "ALL", "sales": "張鈞昊", "sales_code": "1642"},
+    {"warehouse_code": "PH2301", "customer_code": "P00200000", "channel": "藥美妝", "brand": "ALL", "sales": "張鈞昊", "sales_code": "1642"},
+    {"warehouse_code": "PH2302", "customer_code": "P00200000", "channel": "藥美妝", "brand": "ALL", "sales": "張鈞昊", "sales_code": "1642"},
+    {"warehouse_code": "PH1300", "customer_code": "E00300000", "channel": "網路", "brand": "ORAL-B手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH1300", "customer_code": "E00300000", "channel": "網路", "brand": "ORAL-B電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH1300", "customer_code": "E00300000", "channel": "網路", "brand": "CREST手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH1300", "customer_code": "E00300000", "channel": "網路", "brand": "CREST電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH1300", "customer_code": "E00300000", "channel": "網路", "brand": "Style", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PH1300", "customer_code": "E00300000", "channel": "網路", "brand": "SUNBEAM個人護理", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PH1300", "customer_code": "E00300000", "channel": "網路", "brand": "Medisana", "sales": "孫于涵", "sales_code": "5827"},
+    {"warehouse_code": "PH1300", "customer_code": "E00300000", "channel": "網路", "brand": "BRAUN個人護理", "sales": "蕭宇涵", "sales_code": "1573"},
+    {"warehouse_code": "PA1300", "customer_code": "E00900000", "channel": "網路", "brand": "ORAL-B手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PA1300", "customer_code": "E00900000", "channel": "網路", "brand": "ORAL-B電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PA1300", "customer_code": "E00900000", "channel": "網路", "brand": "CREST手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PA1300", "customer_code": "E00900000", "channel": "網路", "brand": "CREST電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PA1300", "customer_code": "E00900000", "channel": "網路", "brand": "Style", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PA1300", "customer_code": "E00900000", "channel": "網路", "brand": "SUNBEAM個人護理", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PA1300", "customer_code": "E00900000", "channel": "網路", "brand": "Medisana", "sales": "孫于涵", "sales_code": "5827"},
+    {"warehouse_code": "PA1300", "customer_code": "E00900000", "channel": "網路", "brand": "BRAUN個人護理", "sales": "蕭宇涵", "sales_code": "1573"},
+    {"warehouse_code": "PH5300", "customer_code": "E00400000", "channel": "網路", "brand": "ORAL-B手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH5300", "customer_code": "E00400000", "channel": "網路", "brand": "ORAL-B電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH5300", "customer_code": "E00400000", "channel": "網路", "brand": "CREST手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH5300", "customer_code": "E00400000", "channel": "網路", "brand": "CREST電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH5300", "customer_code": "E00400000", "channel": "網路", "brand": "Style", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PH5300", "customer_code": "E00400000", "channel": "網路", "brand": "SUNBEAM個人護理", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PH5300", "customer_code": "E00400000", "channel": "網路", "brand": "Medisana", "sales": "孫于涵", "sales_code": "5827"},
+    {"warehouse_code": "PH5300", "customer_code": "E00400000", "channel": "網路", "brand": "BRAUN個人護理", "sales": "蕭宇涵", "sales_code": "1573"},
+    {"warehouse_code": "PH5300", "customer_code": "E00200000", "channel": "網路", "brand": "ORAL-B手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH6300", "customer_code": "E00200000", "channel": "網路", "brand": "ORAL-B電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH6300", "customer_code": "E00200000", "channel": "網路", "brand": "CREST手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH6300", "customer_code": "E00200000", "channel": "網路", "brand": "CREST電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH6300", "customer_code": "E00200000", "channel": "網路", "brand": "Style", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PH6300", "customer_code": "E00200000", "channel": "網路", "brand": "SUNBEAM個人護理", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PH6300", "customer_code": "E00200000", "channel": "網路", "brand": "Medisana", "sales": "孫于涵", "sales_code": "5827"},
+    {"warehouse_code": "PH6300", "customer_code": "E00200000", "channel": "網路", "brand": "BRAUN個人護理", "sales": "蕭宇涵", "sales_code": "1573"},
+    {"warehouse_code": "PH5300", "customer_code": "E00100000", "channel": "網路", "brand": "ORAL-B手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH7300", "customer_code": "E00100000", "channel": "網路", "brand": "ORAL-B電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH7300", "customer_code": "E00100000", "channel": "網路", "brand": "CREST手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH7300", "customer_code": "E00100000", "channel": "網路", "brand": "CREST電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH7300", "customer_code": "E00100000", "channel": "網路", "brand": "Style", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PH7300", "customer_code": "E00100000", "channel": "網路", "brand": "SUNBEAM個人護理", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PH7300", "customer_code": "E00100000", "channel": "網路", "brand": "Medisana", "sales": "孫于涵", "sales_code": "5827"},
+    {"warehouse_code": "PH7300", "customer_code": "E00100000", "channel": "網路", "brand": "BRAUN個人護理", "sales": "蕭宇涵", "sales_code": "1573"},
+    {"warehouse_code": "PH5300", "customer_code": "E00600000", "channel": "網路", "brand": "ORAL-B手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH9300", "customer_code": "E00600000", "channel": "網路", "brand": "ORAL-B電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH9300", "customer_code": "E00600000", "channel": "網路", "brand": "CREST手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH9300", "customer_code": "E00600000", "channel": "網路", "brand": "CREST電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PH9300", "customer_code": "E00600000", "channel": "網路", "brand": "Style", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PH9300", "customer_code": "E00600000", "channel": "網路", "brand": "SUNBEAM個人護理", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PH9300", "customer_code": "E00600000", "channel": "網路", "brand": "Medisana", "sales": "孫于涵", "sales_code": "5827"},
+    {"warehouse_code": "PH9300", "customer_code": "E00600000", "channel": "網路", "brand": "BRAUN個人護理", "sales": "蕭宇涵", "sales_code": "1573"},
+    {"warehouse_code": "PH5300", "customer_code": "E05100000", "channel": "網路", "brand": "ORAL-B手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PHA300", "customer_code": "E05100000", "channel": "網路", "brand": "ORAL-B電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PHA300", "customer_code": "E05100000", "channel": "網路", "brand": "CREST手動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PHA300", "customer_code": "E05100000", "channel": "網路", "brand": "CREST電動", "sales": "邱佳穎", "sales_code": "6126"},
+    {"warehouse_code": "PHA300", "customer_code": "E05100000", "channel": "網路", "brand": "Style", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PHA300", "customer_code": "E05100000", "channel": "網路", "brand": "SUNBEAM個人護理", "sales": "張清雯", "sales_code": "6131"},
+    {"warehouse_code": "PHA300", "customer_code": "E05100000", "channel": "網路", "brand": "Medisana", "sales": "孫于涵", "sales_code": "5827"},
+    {"warehouse_code": "PHA300", "customer_code": "E05100000", "channel": "網路", "brand": "BRAUN個人護理", "sales": "蕭宇涵", "sales_code": "1573"},
+])
+
+# %%

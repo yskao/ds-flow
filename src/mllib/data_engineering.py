@@ -98,9 +98,9 @@ def prepare_predict_table_to_sql(
     round_columns = ["sales_model", "less_likely_lb", "likely_lb", "likely_ub", "less_likely_ub"]
 
     predict_df = predict_df.assign(
+        month_version=predicted_on_date,
         dep_code=f"{department_code}00",
         predicted_on_date=pd.to_datetime(predicted_on_date, format="%Y-%m-%d"),
-        month_version=lambda df: df["predicted_on_date"],
         date=lambda df: pd.to_datetime(df["date"], format="%Y-%m-%d"),
         M=lambda df: (
             df["date"].dt.month.astype("int")

@@ -18,6 +18,8 @@ lifetimes = "*"
 xgboost = "*"
 scikit-learn = "*"
 statsmodels = "*"
+pygsheets = "*"
+tqdm = "*"
 
 [dev-packages]
 flake8 = "*"
@@ -28,6 +30,9 @@ isort = "*"
 ipython = "*"
 pre-commit = "*"
 ipykernel = "*"
+pytest = "*"
+pytest-mock = "*"
+pytest-cov = "*"
 
 [requires]
 python_version = "3.11"

@@ -1,0 +1,2 @@
+month_version,dep_code,brand,product_category_1,product_category_2,product_category_3,product_id_combo,product_name,date,predicted_on_date,M,sales_model,less_likely_lb,likely_lb,likely_ub,less_likely_ub
+2023-06-13,P0300,,,,,MECP0007,ECOMED 電動牙刷 ETB100,2023-06-01T00:00:00,2023-06-13T00:00:00,1,0.0,0.0,0.0,0.0,0.0

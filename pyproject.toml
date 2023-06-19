@@ -32,6 +32,7 @@ ignore = [
     "RET505",
     "SLF001",
     "N802",
+    "S101",
 ]
 
 # Exclude a variety of commonly ignored directories.
@@ -67,3 +68,13 @@ max-complexity = 10
 
 [tool.ruff.isort]
 known-first-party = ["flows", "tasks", "utils"]
+
+[tool.pytest.ini_options]
+addopts = "--cov src/mllib --cov-report=term-missing --cov-fail-under=80"
+
+[tool.coverage.run]
+omit = [
+    "src/mllib/sql_query/*",
+    "src/mllib/ml_utils/*",
+    "src/mllib/dl_algo/*"
+]
