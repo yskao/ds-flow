@@ -1,7 +1,7 @@
 
 
 class CylinderSQL:
-
+    """soda stream bq script."""
 
     def orders_hs_old_sql() -> str:
         orders_hs_old_sql_query = """
