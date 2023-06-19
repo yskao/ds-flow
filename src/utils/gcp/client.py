@@ -57,6 +57,11 @@ def get_bigquery_client() -> BigQueryClient:
     return GcpCredentials.load("datawarehouse").get_bigquery_client(location="asia-east1")
 
 
+def get_bigquery_client_for_jupyter() -> BigQueryClient:
+    """Return BigQuery client."""
+    return GcpCredentials.load("datawarehouse").get_bigquery_client(location="asia-east1")
+
+
 def execute_multiple_query(
     bigquery_client: BigQueryClient,
     queries: list[str],
