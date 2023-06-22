@@ -1,21 +1,25 @@
 
+from pathlib import Path
 from typing import TypeVar
 
+import joblib
 import numpy as np
 import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
 from google.cloud.bigquery import LoadJobConfig, QueryJobConfig, ScalarQueryParameter
+from google.cloud.storage import Client as GCSClient
 from mllib.data_engineering import (
     gen_dummies,
     gen_repurchase_train_and_test_df,
     remove_english_symbol_for_series,
 )
 from mllib.data_extraction import ExtractDataForTraining
+from mllib.ml_utils.utils import model_upload_to_gcs
 from mllib.repurchase.hlh_repurchase import HLHRepurchase
 from mllib.sql_query.soda_stream_repurchase_script import cdp_soda_stream_sql
 from prefect import flow, get_run_logger, task
 
-from utils.gcp.client import get_bigquery_client
+from utils.gcp.client import get_bigquery_client, get_gcs_client
 from utils.prefect import generate_flow_name
 
 Predictor = TypeVar("Predictor")
@@ -181,6 +185,26 @@ def train_seasonal_model(train_seasonal_df: pd.DataFrame) -> Predictor:
     return ml_seasonal_model
 
 
+@task(name="store_model_to_cloud_storage")
+def store_trained_model_to_gcs(
+    model: Predictor,
+    model_version: str,
+    gcs_client: GCSClient,
+) -> None:
+    local_model_path = f"soda_stream_repurchase_model_{model_version}.json"
+    gcs_model_path = "soda-stream-repurchase/" + local_model_path
+    joblib.dump(model.repurchase_model.clf_model, local_model_path)
+    model_upload_to_gcs(
+        local_model_path=local_model_path,
+        gcs_model_path=gcs_model_path,
+        bucket_name="ml-project-hlh",
+        gcs_client=gcs_client,
+    )
+    remove_path = Path(local_model_path)
+    if remove_path.exists():
+        remove_path.unlink()
+
+
 @task
 def eval_metrics(ml_model: Predictor) -> float:
     roc_auc = ml_model.repurchase_model._get_training_evaluation()
@@ -246,6 +270,7 @@ def gen_cdp_soda_stream_data_to_bq(bigquery_client: BigQueryClient):
 def gas_cylinder_repurchase_flow(init: bool = False) -> None:
     """Flow for ds.ds_sodastream_prediction."""
     bigquery_client = get_bigquery_client()
+    gcs_client = get_gcs_client()
     member_cylinder_points_df = (
         ExtractDataForTraining().get_cylinder_points_df(bigquery_client)
         .rename(columns={
@@ -313,7 +338,7 @@ def gas_cylinder_repurchase_flow(init: bool = False) -> None:
 
     # 加入季節性的用戶到原本預測的用戶中
     bq_df_has_seasonal_probability = (
-        bq_df.loc[bq_df["Member_Mobile"].isin(pred_seasonal_result["Member_Mobile"]), "Repurchase_Possibility"])
+        bq_df.loc[bq_df["Member_Mobile"].isin(pred_seasonal_result["Member_Mobile"]), "Repurchase_Possibility"].dropna())
 
     pred_seasonal_result["Repurchase_Possibility"] = np.where(
         bq_df_has_seasonal_probability >= pred_seasonal_result["Repurchase_Possibility"],
@@ -333,6 +358,12 @@ def gas_cylinder_repurchase_flow(init: bool = False) -> None:
     upload_df_to_bq(bigquery_client, bq_df)
     # 從 bq 抓資料計算再另存 table
     gen_cdp_soda_stream_data_to_bq(bigquery_client)
+    # save model
+    store_trained_model_to_gcs(
+        model=ml_model,
+        model_version=assess_date.strftime("%Y-%m-%d"),
+        gcs_client=gcs_client,
+    )
 
 if __name__ == "__main__":
     gas_cylinder_repurchase_flow(False)

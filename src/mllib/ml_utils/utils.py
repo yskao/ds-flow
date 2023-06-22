@@ -1,11 +1,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
 
 from mllib.data_engineering import add_product_id_combo_column
 from utils.google_sheets import get_google_sheet_client
+
+if TYPE_CHECKING:
+    from google.cloud.storage import Client as GCSClient
 
 
 def get_product_df(sales_df: pd.DataFrame, training_info: pd.DataFrame) -> pd.DataFrame:
@@ -159,3 +164,25 @@ def get_time_tag(transaction_df: pd.DataFrame, datetime_col: str, time_feature: 
     else:
         pass
     return transaction_df
+
+
+def model_upload_to_gcs(
+    local_model_path: str,
+    gcs_model_path: str,
+    bucket_name: str,
+    gcs_client: GCSClient,
+) -> None:
+    bucket = gcs_client.get_bucket(bucket_name)
+    blob = bucket.blob(gcs_model_path)
+    return blob.upload_from_filename(local_model_path)
+
+
+def model_download_from_gcs(
+    local_model_path: str,
+    gcs_model_path: str,
+    bucket_name: str,
+    gcs_client: GCSClient,
+) -> None:
+    bucket = gcs_client.get_bucket(bucket_name)
+    blob = bucket.blob(gcs_model_path)
+    return blob.download_to_filename(local_model_path)

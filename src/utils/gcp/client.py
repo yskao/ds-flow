@@ -4,6 +4,7 @@ from typing import TypeVar
 
 from google.cloud.bigquery import Client as BigQueryClient
 from google.cloud.bigquery import ConnectionProperty, QueryJobConfig, ScalarQueryParameter
+from google.cloud.storage import Client as GCSClient
 from prefect_gcp import GcpCredentials
 
 BigquerySessionType = TypeVar("BigquerySessionType", bound="BigquerySession")
@@ -57,9 +58,9 @@ def get_bigquery_client() -> BigQueryClient:
     return GcpCredentials.load("datawarehouse").get_bigquery_client(location="asia-east1")
 
 
-def get_bigquery_client_for_jupyter() -> BigQueryClient:
-    """Return BigQuery client."""
-    return GcpCredentials.load("datawarehouse").get_bigquery_client(location="asia-east1")
+def get_gcs_client() -> GCSClient:
+    """Return GCS client."""
+    return GcpCredentials.load("datawarehouse").get_cloud_storage_client()
 
 
 def execute_multiple_query(
