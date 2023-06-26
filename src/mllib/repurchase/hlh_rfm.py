@@ -38,7 +38,7 @@ class RFM:
         """添加顧客購買數量的統計信息."""
         return (
             self.prepared_customer_group
-            [self.price_col]
+            [self.quantity_col]
             .agg(["sum", "mean"])
             .rename(columns={"sum": "quantity_sum", "mean": "quantity_mean"})
             .reset_index()
