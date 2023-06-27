@@ -97,3 +97,10 @@ def soda_stream_repurchase_data_predictions():
     data_path = Path().resolve().joinpath(
         "tests/test_data/test_soda_stream_repurchase/soda_stream_repurchase_predictions.csv")
     return pd.read_csv(data_path, dtype={"1": np.float32})
+
+
+@pytest.fixture()
+def rfm_data():
+    data_path = Path().resolve().joinpath(
+        "tests/test_data/test_soda_stream_repurchase/rfm_data.csv")
+    return pd.read_csv(data_path, dtype={"mobile": str})
