@@ -46,9 +46,9 @@ bq_columns = {
 }
 
 source_map = {
-    "HS-91APP": [0, 0, 1],
+    "HS-91APP": [1, 0, 0],
     "HS-OLD": [0, 1, 0],
-    "POS": [1, 0, 0],
+    "POS": [0, 0, 1],
 }
 
 
@@ -95,7 +95,7 @@ def prepare_training_data(bigquery_client: BigQueryClient, assess_date: pd.Times
 
     logging.info("remove_english_symbol_for_series...")
     correct_mobile_index = remove_english_symbol_for_series(data["mobile"]).index
-    orders_df = data.loc[correct_mobile_index]
+    orders_df = data.loc[correct_mobile_index].reset_index(drop=True)
 
     logging.info("gen_dummies for data_source...")
     dummy = gen_dummies(orders_df["data_source"], mapping_dict=source_map)
