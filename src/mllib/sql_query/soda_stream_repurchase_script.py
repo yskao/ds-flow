@@ -56,7 +56,7 @@ class CylinderSQL:
             LEFT JOIN `dim.products` P ON H.TH004 = P.sku --產品資訊
             LEFT JOIN `ods_ERP.BOMMD` D ON P.product_type = '虛擬組合' AND H.TH004 = D.MD001 --拆產品組合
             LEFT JOIN `ods_ERP.COPTJ` J ON H.TH074 = J.TJ059 AND H.TH004 = J.TJ004 --作廢紀錄
-            INNER JOIN `ods_ERP.WSCMI` I ON G.TG108 = I.MI001 AND LENGTH(I.MI029) = 10 --會員資訊
+            INNER JOIN `ods_ERP.WSCMI` I ON RTRIM(G.TG108) = RTRIM(I.MI001) AND LENGTH(I.MI029) = 10 --會員資訊
             WHERE G.TG004 LIKE 'F909%' --91APP
                 AND J.TJ059 IS NULL --若有作廢交易就不納入計算
                 AND (P.product_category_id_2 = '4201' --判斷鋼瓶產品中類

@@ -5,6 +5,7 @@ __pycache__/
 src/jupyter/*
 *.py[cod]
 *$py.class
+mlruns/*
 
 # C extensions
 *.so
