@@ -688,7 +688,7 @@ def get_gsheet_url_dict(department: int, year: int) -> dict[str, list[str]]:
 
     url_dict = defaultdict(list)
     for _, data in gsheet_df.iterrows():
-        url_dict[data["gsheet_type"]].append(data["sh_url"]) # noqa
+        url_dict[data["gsheet_type"]].append(data["sh_url"])
 
     return url_dict
 

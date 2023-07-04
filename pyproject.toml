@@ -33,6 +33,7 @@ ignore = [
     "SLF001",
     "N802",
     "S101",
+    "PERF401",
 ]
 
 # Exclude a variety of commonly ignored directories.

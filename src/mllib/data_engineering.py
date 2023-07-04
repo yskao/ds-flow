@@ -186,3 +186,30 @@ def gen_repurchase_train_and_test_df(
             f"repurchase_{n_days}_flag": lambda df: df[f"repurchase_{n_days}_flag"].fillna(0)},
         ), rfm_table_for_test,
     )
+
+
+def get_continuing_buying_for_the_past_two_years(
+    orders_correct_df: pd.DataFrame,
+    assess_date: pd.Timestamp,
+) -> pd.Series:
+
+    orders_df = orders_correct_df.copy()
+    orders_df["month"] = orders_df["order_date"].dt.month
+    orders_df["year"] = orders_df["order_date"].dt.year
+
+    past_two_year = (assess_date - pd.DateOffset(years=2)).year
+
+    if past_two_year >= orders_df["order_date"].max().year or past_two_year < orders_df["order_date"].min().year:
+        msg = "invalid assess_date, date in dataset must include at least 2 years"
+        raise ValueError(msg)
+
+    qualified_seasonal_member = (
+        orders_df
+        .query(f"'{past_two_year}' <= order_date < '{assess_date.year}' and month in (6,7,8)")
+        .groupby(["mobile", "year"], as_index=False)["month"].count()
+        .pivot_table(values="month", columns="year", index="mobile", fill_value=0)
+        .loc[lambda df: (df.iloc[:, 0] >= 1) & (df.iloc[:, 1] >= 1)]
+        .index
+    )
+
+    return qualified_seasonal_member
