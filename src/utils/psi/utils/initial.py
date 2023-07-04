@@ -76,7 +76,7 @@ def create_product_df(brand_product_config_df: DataFrame, row_name_tuple_list: l
                 "品名": row["自訂品名"],
                 "進銷存": psi_type,
                 "列名": name,
-            })
+            }) # noqa
 
     return pd.concat([product_df, pd.DataFrame(product_data_rows)])
 
