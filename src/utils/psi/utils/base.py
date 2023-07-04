@@ -49,6 +49,6 @@ def get_group_code_dict(agent_customer_info_df: DataFrame, agent_name: str) -> d
 
     group_code_dict = defaultdict(list)
     for _, row in channel_by_agent.iterrows():
-        group_code_dict[row["頁籤分類"]].append(row["集團代號"]) # noqa
+        group_code_dict[row["頁籤分類"]].append(row["集團代號"])
 
     return group_code_dict
