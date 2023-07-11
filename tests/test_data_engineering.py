@@ -1,8 +1,9 @@
 import pandas as pd
 from mllib.data_engineering import (
-    get_continuing_buying_for_the_past_two_years,
+    get_continuing_buying_weights,
     prepare_predict_table_to_sql,
 )
+from pandas.testing import assert_series_equal
 
 
 def test_prepare_predict_table_to_sql(p03_training_info, p03_predict_result):
@@ -15,7 +16,8 @@ def test_prepare_predict_table_to_sql(p03_training_info, p03_predict_result):
     )
 
 
-def test_get_continuing_buying_for_the_past_two_years():
+def test_get_continuing_buying_weights():
+
     data = {
         "mobile": [
             "0922111111",
@@ -38,9 +40,87 @@ def test_get_continuing_buying_for_the_past_two_years():
             pd.to_datetime("2019-05-21"),
         ],
     }
-    expected_result = ["0922111111"]
+    expected_result = pd.Series(
+        data=[0.1, 0.0], index=["0922111111", "0999999999"], name="seasonal_weight")
 
-    result = get_continuing_buying_for_the_past_two_years(
-        pd.DataFrame(data), assess_date=pd.to_datetime("2020-01-03"))
+    result = get_continuing_buying_weights(
+        pd.DataFrame(data),
+        assess_date=pd.to_datetime("2020-01-03"),
+        summer_period=[6,7,8,9],
+        past_year=2,
+    )
+    assert_series_equal(expected_result, result)
 
-    assert expected_result == result
+    # 三個號碼只有在 2019 有紀錄,所以權重應為 0
+    expected_result = pd.Series(
+        data=[0.0, 0.0, 0.0],
+        index=["0901234567", "0922111111", "0999999999"],
+        name="seasonal_weight",
+    )
+    result = get_continuing_buying_weights(
+        pd.DataFrame(data),
+        assess_date=pd.to_datetime("2021-01-03"),
+        summer_period=[5,6,7,8,9,10],
+        past_year=2,
+    )
+    assert_series_equal(expected_result, result)
+
+    # 三個號碼在 2021、2020 都沒有資料,應為空值
+    expected_result = pd.Series([], dtype=float, name="seasonal_weight")
+    result = get_continuing_buying_weights(
+        pd.DataFrame(data),
+        assess_date=pd.to_datetime("2022-01-03"),
+        summer_period=[5,6,7,8,9,10],
+        past_year=2,
+    )
+    assert all(expected_result == result)
+
+    # past year = 5, 四個號碼在過去都有紀錄
+    data = {
+        "mobile": [
+            "0922111111",
+            "0922111111",
+            "0922111111",
+            "0922111111",
+            "0901234567",
+            "0901234567",
+            "0999999999",
+            "0999999999",
+            "0987654321",
+            "0987654321",
+            "0987654321",
+            "0987654321",
+            "0987654321",
+            "0987654321",
+            "0987654321",
+        ],
+        "order_date": [
+            pd.to_datetime("2018-03-01"),
+            pd.to_datetime("2018-07-01"),
+            pd.to_datetime("2019-08-01"),
+            pd.to_datetime("2019-07-01"),
+            pd.to_datetime("2018-04-01"),
+            pd.to_datetime("2019-05-11"),
+            pd.to_datetime("2018-08-01"),
+            pd.to_datetime("2019-05-21"),
+            pd.to_datetime("2017-06-01"),
+            pd.to_datetime("2018-05-02"),
+            pd.to_datetime("2019-12-05"),
+            pd.to_datetime("2020-04-30"),
+            pd.to_datetime("2021-07-07"),
+            pd.to_datetime("2022-07-04"),
+            pd.to_datetime("2023-06-28"),
+        ],
+    }
+    expected_result = pd.Series(
+        data=[0.0, 0.1, 0.2, 0.1],
+        index=["0901234567", "0922111111", "0987654321", "0999999999"],
+        name="seasonal_weight",
+    )
+    result = get_continuing_buying_weights(
+        pd.DataFrame(data),
+        assess_date=pd.to_datetime("2023-01-03"),
+        summer_period=[5,6,7,8,9,10],
+        past_year=5,
+    )
+    assert_series_equal(expected_result, result)

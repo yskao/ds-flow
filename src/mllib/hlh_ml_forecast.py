@@ -28,6 +28,7 @@ class HLHMLForecast:
         if len(dataset.groupby("date")["date"]) < (future_shift+lag_shift+1):
             raise ValueError(error_msg)
 
+        self.dataset=dataset
         self.target = target
         self.future_shift = future_shift
         self.lag_shift = lag_shift
@@ -78,6 +79,24 @@ class HLHMLForecast:
         return self.model.predict(x)
 
 
+    def _adjust_seasonal_quantity(
+        self,
+        train_df: pd.DataFrame,
+        quantity_df: pd.DataFrame,
+        target: str,
+        train_df_datetime_col: str,
+    ) -> pd.DataFrame:
+        """修正數量."""
+        tmp_df = train_df.copy()
+        tmp_df["month"] = tmp_df[train_df_datetime_col].dt.month
+        tmp_df = tmp_df.groupby("month", as_index=False)[target].mean()
+        tmp_df = tmp_df.rename(columns={target: "mean_"+target})
+        tmp_df = tmp_df.merge(quantity_df, on="month", how="inner")
+        quantity_df.loc[
+            quantity_df["month"].isin([5,6,7,8,9,10]), target] = tmp_df["mean_"+target]
+        return quantity_df
+
+
     def _quantile_result(self, forecast_df: pd.DataFrame, target: str="sales") -> pd.DataFrame:
         """根據預測的標準差計算分位數區間,並加入到預測結果 DataFrame 中."""
         return forecast_df.assign(
@@ -91,6 +110,7 @@ class HLHMLForecast:
     def rolling_forecast(
         self,
         product_id: list,
+        seasonal_product_id: list | None = None,
         n_periods: int=1,
     ) -> pd.DataFrame:
         """針對給定的產品 ID 預測未來多期銷售量."""
@@ -140,6 +160,16 @@ class HLHMLForecast:
                     [pd.Series(i, name=self.target) for i in tmp_y[-n_periods:]],
                   ).reset_index(drop=True),
               ), axis=1)
+
+            # 修正季節性商品數量
+            if seasonal_product_id and pid in seasonal_product_id:
+                adjust_tmp_forecast_df = self._adjust_seasonal_quantity(
+                    train_df=self.dataset.query(f"product_id_combo == '{pid}'"),
+                    quantity_df=self.forecast_df.copy(),
+                    target=self.target,
+                    train_df_datetime_col="date",
+                )
+                self.forecast_df = adjust_tmp_forecast_df
 
             # quantile result
             self.forecast_df = self._quantile_result(self.forecast_df)
