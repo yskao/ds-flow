@@ -6,6 +6,7 @@ from google.cloud.bigquery import Client as BigQueryClient
 from mllib.data_transform import TransformDataForTraining
 from mllib.hlh_ml_forecast import HLHMLForecast
 from mllib.ml_utils.sales_forecasting_dep4_utils import (
+    dep04_seasonal_product_list,
     predict_data_to_bq,
     reference_data_to_bq,
     test_data_to_bq,
@@ -82,7 +83,10 @@ def model_predict(model: Predictor, train_df: pd.DataFrame) -> pd.DataFrame:
     logging = logging = get_run_logger()
     logging.info("model predicting ...")
     product_id_list = train_df["product_id_combo"].unique()
-    predict_df = model.rolling_forecast(n_periods=1, product_id=product_id_list)
+    predict_df = model.rolling_forecast(
+        n_periods=2,
+        product_id=product_id_list,
+        seasonal_product_id=dep04_seasonal_product_list())
     logging.info("model predicting finish")
     return predict_df
 
@@ -225,7 +229,7 @@ def store_references_to_bq(
 
 
 @flow(name=generate_flow_name())
-def mlops_sales_dep4_forecasting_flow(init: bool=False) -> None:
+def mlops_sales_dep4_forecasting_flow1(init: bool=False) -> None:
 
     logging = logging = get_run_logger()
     bigquery_client = get_bigquery_client()
@@ -286,4 +290,4 @@ def mlops_sales_dep4_forecasting_flow(init: bool=False) -> None:
 
 
 if __name__ == "__main__":
-    mlops_sales_dep4_forecasting_flow(False)
+    mlops_sales_dep4_forecasting_flow1(False)

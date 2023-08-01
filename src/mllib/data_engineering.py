@@ -109,6 +109,7 @@ def prepare_predict_table_to_sql(
         ).rename(columns={"sales": "sales_model"})
 
     predict_df[round_columns] = predict_df[round_columns].round()
+    predict_df["M"] = np.where(predict_df["M"]<0, 12+predict_df["M"], np.where(predict_df["M"]==0, 12, predict_df["M"]))
     product_unique_info = product_data_info.groupby("product_id_combo", as_index=False).first()
     return predict_df.merge(product_unique_info, on="product_id_combo")
 

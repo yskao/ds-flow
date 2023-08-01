@@ -11,7 +11,6 @@ from google.cloud.storage import Client as GCSClient
 from mllib.data_engineering import (
     gen_dummies,
     gen_repurchase_train_and_test_df,
-    get_continuing_buying_for_the_past_two_years,
     remove_english_symbol_for_series,
 )
 from mllib.data_extraction import ExtractDataForTraining
@@ -111,12 +110,6 @@ def prepare_training_data(bigquery_client: BigQueryClient, assess_date: pd.Times
         ["mobile"]
     )
     orders_correct_df = orders_df[orders_df["mobile"].isin(match_mobile)]
-
-    # 季節性用戶 - 夏季
-    if assess_date.month in [6, 7, 8, 9]:
-        get_continuing_buying_for_the_past_two_years(
-            orders_correct_df=orders_correct_df,
-            assess_date=assess_date)
 
     logging.info("gen training and predicting data...")
     # 切資料時,會根據 assess_date 定義資料的使用區間
@@ -363,9 +356,6 @@ def gas_cylinder_repurchase_flow(init: bool = False) -> None:
     bq_df["Member_GasCylindersReward_Point"] = bq_df["Member_GasCylindersReward_Point"].fillna(0)
     delete_assess_date_duplicate(bigquery_client, assess_date)
     upload_df_to_bq(bigquery_client, bq_df)
-
-
-
     # 從 bq 抓資料計算再另存 table
     gen_cdp_soda_stream_data_to_bq(bigquery_client)
     # save model

@@ -82,7 +82,7 @@ def model_predict(model: Predictor, train_df: pd.DataFrame) -> pd.DataFrame:
     logging = logging = get_run_logger()
     logging.info("model predicting ...")
     product_id_list = train_df["product_id_combo"].unique()
-    predict_df = model.rolling_forecast(n_periods=1, product_id=product_id_list)
+    predict_df = model.rolling_forecast(n_periods=2, product_id=product_id_list)
     logging.info("model predicting finish")
     return predict_df
 
