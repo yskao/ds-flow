@@ -82,7 +82,7 @@ def model_predict(model: Predictor, train_df: pd.DataFrame) -> pd.DataFrame:
     logging = logging = get_run_logger()
     logging.info("model predicting ...")
     product_id_list = train_df["product_id_combo"].unique()
-    predict_df = model.rolling_forecast(n_periods=1, product_id=product_id_list)
+    predict_df = model.rolling_forecast(n_periods=2, product_id=product_id_list)
     logging.info("model predicting finish")
     return predict_df
 
@@ -98,7 +98,7 @@ def generate_model_testing_df(
     logging = logging = get_run_logger()
     logging.info("generating model testing table ...")
     target_time = pd.to_datetime(target_time)
-    start_month = (target_time - pd.DateOffset(months=6)).strftime("%Y-%m-%d")
+    start_month = (target_time - pd.DateOffset(months=6)).strftime("%Y-%m-01")
     training_info = trans_model.data_extraction.get_training_target()
     agent_forecast = trans_model.data_extraction.get_agent_forecast_data(
         start_month=start_month,
@@ -142,7 +142,7 @@ def generate_reference_table(
     logging = logging = get_run_logger()
     logging.info("generating reference table ...")
     target_time = pd.to_datetime(target_time)
-    start_month = (pd.Timestamp.now("Asia/Taipei") - pd.DateOffset(months=6)).strftime("%Y-%m-%d")
+    start_month = (pd.Timestamp.now("Asia/Taipei") - pd.DateOffset(months=6)).strftime("%Y-%m-01")
     agent_forecast = trans_model.data_extraction.get_agent_forecast_data(
         start_month=start_month,
         end_month=target_time,
@@ -229,7 +229,7 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
 
     logging = logging = get_run_logger()
     bigquery_client = get_bigquery_client()
-    end_date = pd.Timestamp.now("Asia/Taipei").tz_localize(None).strftime("%Y-%m-%d")
+    end_date = pd.Timestamp.now("Asia/Taipei").tz_localize(None).strftime("%Y-%m-01")
 
     if init:
         logging.info("create_p03_model_predict_table ...")

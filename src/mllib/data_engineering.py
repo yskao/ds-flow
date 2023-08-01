@@ -1,4 +1,5 @@
 
+
 import numpy as np
 import pandas as pd
 
@@ -108,6 +109,7 @@ def prepare_predict_table_to_sql(
         ).rename(columns={"sales": "sales_model"})
 
     predict_df[round_columns] = predict_df[round_columns].round()
+    predict_df["M"] = np.where(predict_df["M"]<0, 12+predict_df["M"], np.where(predict_df["M"]==0, 12, predict_df["M"]))
     product_unique_info = product_data_info.groupby("product_id_combo", as_index=False).first()
     return predict_df.merge(product_unique_info, on="product_id_combo")
 
@@ -137,7 +139,7 @@ def gen_repurchase_train_and_test_df(
     transaction_df.loc[:, datetime_col] = pd.to_datetime(transaction_df[datetime_col])
     transaction_df = transaction_df.query(f"'{start_date}' <= {datetime_col} < '{assess_date}'")
     transaction_df = RFM._get_time_tag(transaction_df, datetime_col, time_feature)
-    max_date = transaction_df[datetime_col].max() # 根據每個人的最後一次購買時間當作最大時間
+    max_date = transaction_df[datetime_col].max() # 找出所有人中最後一次購買時間取最大值作為標準
     cutoff = max_date - pd.to_timedelta(n_days, unit="D") # 最後一次購買時間 - n_days 作為標籤定義
 
     # 將 in 和 out 資料區別出來,out 資料用來作為是否有回購的依據
@@ -186,3 +188,41 @@ def gen_repurchase_train_and_test_df(
             f"repurchase_{n_days}_flag": lambda df: df[f"repurchase_{n_days}_flag"].fillna(0)},
         ), rfm_table_for_test,
     )
+
+
+def get_continuing_buying_weights(
+    orders_correct_df: pd.DataFrame,
+    assess_date: pd.Timestamp,
+    summer_period: list | None = None,
+    past_year: int = 2,
+) -> pd.Series:
+
+    weight_mapping = {
+        0: 0,
+        1: 0,
+        2: 0.1,
+        3: 0.2,
+        4: 0.3,
+        5: 0.4,
+    }
+
+    orders_df = orders_correct_df.copy()
+    orders_df["month"] = orders_df["order_date"].dt.month
+    orders_df["year"] = orders_df["order_date"].dt.year
+
+    past_years = (assess_date - pd.DateOffset(years=past_year)).year
+    output_df = pd.DataFrame(columns=np.arange(past_years, assess_date.year))
+
+    seasonal_member = (
+        orders_df
+        .query(f"'{past_years}' <= order_date < '{assess_date.year}' and month in {tuple(summer_period)}")
+        .groupby(["mobile", "year"], as_index=False)["month"].count()
+        .pivot_table(values="month", columns="year", index="mobile", fill_value=0)
+    )
+
+    concat_df = (
+        pd.concat((output_df, seasonal_member), axis=0, join="inner")
+        .assign(seasonal_weight=lambda df: np.where(df>=1, 1, 0).sum(1))
+    ).assign(seasonal_weight=lambda df: df["seasonal_weight"].map(weight_mapping))
+
+    return concat_df

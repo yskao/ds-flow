@@ -36,7 +36,7 @@ def predict_data_to_bq(
     ]
     model_version = (
         pd.Timestamp.now("Asia/Taipei")
-        .strftime("%Y-%m-%d")
+        .strftime("%Y-%m-01")
     )
     predict_df = prepare_predict_table_to_sql(
         predict_df=predict_df,
@@ -71,7 +71,7 @@ def test_data_to_bq(
     bigquery_client: BigQueryClient,
 ) -> str:
     """將測試資料比較結果存到資料庫."""
-    model_version = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-%d")
+    model_version = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-01")
     test_df.insert(0, "month_version", model_version)
     test_df.insert(1, "dep_code", f"{department_code}00")
     test_df_cols = [
@@ -123,7 +123,7 @@ def reference_data_to_bq(
     bigquery_client: BigQueryClient,
 ) -> str:
     """將 reference 資料比較結果存到資料庫."""
-    model_version = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-%d")
+    model_version = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-01")
     mae_df.insert(0, "month_version", model_version)
     mae_df["dep_code"] = f"{department_code}00"
     query_parameters = [

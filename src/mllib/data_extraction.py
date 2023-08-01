@@ -121,7 +121,7 @@ class ExtractDataForTraining:
                 select
                     month_version, date, product_id_combo, sales_quantity
                 from
-                    p03_model_eval.f_model_sales_forecast_versions
+                    DS.f_sales_forecast_versions
                 where
                     month_version in (@month_versions_range_quot_str)
             """
