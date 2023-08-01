@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+from dateutil.relativedelta import relativedelta
 
 from mllib.repurchase.hlh_rfm import RFM
 
@@ -103,13 +104,15 @@ def prepare_predict_table_to_sql(
         dep_code=f"{department_code}00",
         predicted_on_date=pd.to_datetime(predicted_on_date, format="%Y-%m-%d"),
         date=lambda df: pd.to_datetime(df["date"], format="%Y-%m-%d"),
-        M=lambda df: (
-            df["date"].dt.month.astype("int")
-            - df["predicted_on_date"].dt.month.astype("int") + 1),
         ).rename(columns={"sales": "sales_model"})
 
+    # 計算模型預測日期和未來預測日期的月份差幾個月: 例如模型 8/1 日預測,預測未來 8~12 月,則 M=1,2,3,4,5
+    predict_df["M"] = (
+        predict_df.apply(lambda row: relativedelta(row["date"], row["predicted_on_date"]), axis=1)
+        .apply(lambda x: x.months + x.years*12 + 1)
+    )
+
     predict_df[round_columns] = predict_df[round_columns].round()
-    predict_df["M"] = np.where(predict_df["M"]<0, 12+predict_df["M"], np.where(predict_df["M"]==0, 12, predict_df["M"]))
     product_unique_info = product_data_info.groupby("product_id_combo", as_index=False).first()
     return predict_df.merge(product_unique_info, on="product_id_combo")
 
