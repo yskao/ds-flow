@@ -1,4 +1,5 @@
 
+
 import numpy as np
 import pandas as pd
 
@@ -108,6 +109,7 @@ def prepare_predict_table_to_sql(
         ).rename(columns={"sales": "sales_model"})
 
     predict_df[round_columns] = predict_df[round_columns].round()
+    predict_df["M"] = np.where(predict_df["M"]<0, 12+predict_df["M"], np.where(predict_df["M"]==0, 12, predict_df["M"]))
     product_unique_info = product_data_info.groupby("product_id_combo", as_index=False).first()
     return predict_df.merge(product_unique_info, on="product_id_combo")
 
@@ -188,28 +190,39 @@ def gen_repurchase_train_and_test_df(
     )
 
 
-def get_continuing_buying_for_the_past_two_years(
+def get_continuing_buying_weights(
     orders_correct_df: pd.DataFrame,
     assess_date: pd.Timestamp,
+    summer_period: list | None = None,
+    past_year: int = 2,
 ) -> pd.Series:
+
+    weight_mapping = {
+        0: 0,
+        1: 0,
+        2: 0.1,
+        3: 0.2,
+        4: 0.3,
+        5: 0.4,
+    }
 
     orders_df = orders_correct_df.copy()
     orders_df["month"] = orders_df["order_date"].dt.month
     orders_df["year"] = orders_df["order_date"].dt.year
 
-    past_two_year = (assess_date - pd.DateOffset(years=2)).year
+    past_years = (assess_date - pd.DateOffset(years=past_year)).year
+    output_df = pd.DataFrame(columns=np.arange(past_years, assess_date.year))
 
-    if past_two_year >= orders_df["order_date"].max().year or past_two_year < orders_df["order_date"].min().year:
-        msg = "invalid assess_date, date in dataset must include at least 2 years"
-        raise ValueError(msg)
-
-    qualified_seasonal_member = (
+    seasonal_member = (
         orders_df
-        .query(f"'{past_two_year}' <= order_date < '{assess_date.year}' and month in (6,7,8)")
+        .query(f"'{past_years}' <= order_date < '{assess_date.year}' and month in {tuple(summer_period)}")
         .groupby(["mobile", "year"], as_index=False)["month"].count()
         .pivot_table(values="month", columns="year", index="mobile", fill_value=0)
-        .loc[lambda df: (df.iloc[:, 0] >= 1) & (df.iloc[:, 1] >= 1)]
-        .index
     )
 
-    return qualified_seasonal_member
+    concat_df = (
+        pd.concat((output_df, seasonal_member), axis=0, join="inner")
+        .assign(seasonal_weight=lambda df: np.where(df>=1, 1, 0).sum(1))
+    ).assign(seasonal_weight=lambda df: df["seasonal_weight"].map(weight_mapping))
+
+    return concat_df

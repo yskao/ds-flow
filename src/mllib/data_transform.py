@@ -10,6 +10,7 @@ from utils.baseclass import BomHandler
 
 logging.basicConfig(level=logging.INFO)
 
+
 class  TransformDataForTraining:
     """將 P02、P03、P04 部門的銷售、產品、分類數據轉換為訓練數據."""
 
@@ -28,10 +29,10 @@ class  TransformDataForTraining:
 
 
     def get_transformed_training_data(
-            self,
-            start_date: str,
-            end_date: str,
-            bigquery_client: BigQueryClient,
+        self,
+        start_date: str,
+        end_date: str,
+        bigquery_client: BigQueryClient,
     ) -> pd.DataFrame:
         """獲取轉換後的訓練數據."""
         training_info = self.data_extraction.get_training_target()
