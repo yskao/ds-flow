@@ -229,7 +229,7 @@ def store_references_to_bq(
 
 
 @flow(name=generate_flow_name())
-def mlops_sales_dep4_forecasting_flow1(init: bool=False) -> None:
+def mlops_sales_dep4_forecasting_flow(init: bool=False) -> None:
 
     logging = logging = get_run_logger()
     bigquery_client = get_bigquery_client()
@@ -290,4 +290,4 @@ def mlops_sales_dep4_forecasting_flow1(init: bool=False) -> None:
 
 
 if __name__ == "__main__":
-    mlops_sales_dep4_forecasting_flow1(False)
+    mlops_sales_dep4_forecasting_flow(False)
