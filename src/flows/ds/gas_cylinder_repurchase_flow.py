@@ -10,8 +10,7 @@ from google.cloud.bigquery import LoadJobConfig, QueryJobConfig, ScalarQueryPara
 from google.cloud.storage import Client as GCSClient
 from mllib.data_engineering import (
     gen_dummies,
-    gen_repurchase_train_and_test_df,
-    remove_english_symbol_for_series,
+    gen_repurchase_train_and_test_df
 )
 from mllib.data_extraction import ExtractDataForTraining
 from mllib.ml_utils.utils import model_upload_to_gcs
@@ -93,13 +92,9 @@ def prepare_training_data(bigquery_client: BigQueryClient, assess_date: pd.Times
     # 取資料時,會包含到目前 BQ 裡面最新的資料
     data = data_extraction.get_cylinder_df(bigquery_client)
 
-    logging.info("remove_english_symbol_for_series...")
-    correct_mobile_index = remove_english_symbol_for_series(data["mobile"]).index
-    orders_df = data.loc[correct_mobile_index].reset_index(drop=True)
-
     logging.info("gen_dummies for data_source...")
-    dummy = gen_dummies(orders_df["data_source"], mapping_dict=source_map)
-    orders_df = pd.concat((orders_df, dummy), axis=1)
+    dummy = gen_dummies(data["data_source"], mapping_dict=source_map)
+    orders_df = pd.concat((data, dummy), axis=1)
 
     logging.info("removing frequency <= 1")
     match_mobile = (
@@ -335,7 +330,7 @@ def gas_cylinder_repurchase_flow(init: bool = False) -> None:
     )
 
     bq_df = pd.concat((bq_df, no_cycle_period_member_df), axis=0).reset_index(drop=True)
-
+    
     # 加入季節性的用戶到原本預測的用戶中
     bq_df_has_seasonal_probability = (
         bq_df.loc[bq_df["Member_Mobile"].isin(pred_seasonal_result["Member_Mobile"]), "Repurchase_Possibility"].dropna())

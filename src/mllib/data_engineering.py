@@ -121,10 +121,6 @@ def gen_dummies(feature_series: pd.Series, mapping_dict: dict) -> pd.DataFrame:
     return pd.DataFrame(feature_series.map(mapping_dict).tolist(), columns=list(mapping_dict.keys()))
 
 
-def remove_english_symbol_for_series(series: pd.Series) -> pd.Series:
-    return series[~series.str.contains(r"/|[a-zA-Z]+")]
-
-
 def gen_repurchase_train_and_test_df(
     transaction_df: pd.DataFrame,
     customer_id_col: str,

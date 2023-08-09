@@ -60,6 +60,7 @@ class CylinderSQL:
             WHERE G.TG004 LIKE 'F909%' --91APP
                 AND J.TJ059 IS NULL --若有作廢交易就不納入計算
                 AND (P.product_category_id_2 = '4201' --判斷鋼瓶產品中類
+                AND G.TG023 = "Y"
                 OR P.product_category_1='氣泡水機')
             """
         return orders_hs_91app_sql_query
@@ -74,6 +75,7 @@ class CylinderSQL:
                 IF(D.MD003 IS NULL, V.TV014, V.TV014 * D.MD006) AS sales_quantity,
                 V.TV016 AS sales_amount,
                 I.MI029 AS mobile,
+                V.TV021 AS remark,
                 P.product_name,
                 P.product_category_1
             FROM `ods_ERP.POSTV` V --單頭單身

@@ -211,7 +211,9 @@ class ExtractDataForTraining:
                 sales_quantity=lambda df: pd.to_numeric(df["sales_quantity"]),
             )
             .loc[lambda df: df["mobile"].apply(lambda x: len(str(x)) == 10)]
+            .loc[lambda df: ~df["mobile"].str.contains(r"/|[a-zA-Z]+")]
             .loc[lambda df: df["order_date"].apply(lambda x: type(x) == pd.Timestamp)]
+            .loc[lambda df: ~df["product_name"].str.contains("回收", na=False)]
         )
         return orders_df
 

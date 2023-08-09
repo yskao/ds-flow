@@ -10,8 +10,7 @@ from google.cloud.bigquery import LoadJobConfig, QueryJobConfig, ScalarQueryPara
 from google.cloud.storage import Client as GCSClient
 from mllib.data_engineering import (
     gen_dummies,
-    gen_repurchase_train_and_test_df,
-    remove_english_symbol_for_series,
+    gen_repurchase_train_and_test_df
 )
 from mllib.data_extraction import ExtractDataForTraining
 from mllib.ml_utils.utils import model_upload_to_gcs
@@ -133,13 +132,9 @@ def prepare_training_data(bigquery_client: BigQueryClient, assess_date: pd.Times
     # 取資料時,會包含到目前 BQ 裡面最新的資料
     data = data_extraction.get_cylinder_df(bigquery_client)
 
-    logging.info("remove_english_symbol_for_series...")
-    correct_mobile_index = remove_english_symbol_for_series(data["mobile"]).index
-    orders_df = data.loc[correct_mobile_index].reset_index(drop=True)
-
     logging.info("gen_dummies for data_source...")
-    dummy = gen_dummies(orders_df["data_source"], mapping_dict=source_map)
-    orders_df = pd.concat((orders_df, dummy), axis=1)
+    dummy = gen_dummies(data["data_source"], mapping_dict=source_map)
+    orders_df = pd.concat((data, dummy), axis=1)
 
     logging.info("removing frequency <= 1")
     match_mobile = (
@@ -395,9 +390,12 @@ def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
         )
         .rename(bq_columns, axis="columns")
     )
-
-    bq_df = pd.concat((bq_df, no_cycle_period_member_df), axis=0).reset_index(drop=True)
-
+    
+    # to-do
+    bq_df = pd.concat((bq_df, no_cycle_period_member_df), axis=0)
+    bq_df.loc[bq_df.duplicated("Member_Mobile", keep="last"), ["Repurchase_Possibility", "Repurchase_Flag"]] = [np.nan, 0] # 保留無週期
+    bq_df = bq_df.drop_duplicates("Member_Mobile", keep="first").reset_index(drop=True)
+        
     # 加入季節性的用戶到原本預測的用戶中
     bq_df_has_seasonal_probability = (
         bq_df.loc[bq_df["Member_Mobile"].isin(pred_seasonal_result["Member_Mobile"]), "Repurchase_Possibility"].dropna())
@@ -412,6 +410,7 @@ def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
         pred_seasonal_result["Repurchase_Possibility"])
     bq_df["Repurchase_Flag"] = np.where(bq_df["Repurchase_Possibility"]>=0.5, 1, 0)
     bq_df["ETL_Datetime"] = bq_df["ETL_Datetime"].fillna(method="ffill")
+    bq_df.to_csv("/Users/yushengkao/hlh/ds-flow/src/jupyter/repurchase/data/cylinder/bq_df_no_point.csv", index=False)
 
     # 新增集點資料 - 沒有點數的會員補 0
     # 新增過去兩年鋼瓶活動資料(包含優惠券、點數使用)
@@ -423,9 +422,7 @@ def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
         .merge(cylinder_purchase_qty_df, on="Member_Mobile", how="left")
     ).fillna({
         "Member_GasCylindersReward_Point": 0, "GasCylinders_Purchase_Qty": 0})
-
-    # bq_df["Member_GasCylindersReward_Point"] = bq_df["Member_GasCylindersReward_Point"].fillna(0)
-
+    bq_df.to_csv("/Users/yushengkao/hlh/ds-flow/src/jupyter/repurchase/data/cylinder/bq_df_point.csv", index=False)
     delete_assess_date_duplicate(bigquery_client, assess_date)
     upload_df_to_bq(bigquery_client, bq_df)
     # 從 bq 抓資料計算再另存 table
