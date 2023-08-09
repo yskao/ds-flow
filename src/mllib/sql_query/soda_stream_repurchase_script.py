@@ -198,6 +198,10 @@ class CylinderSQL:
         return gas_cylinder_points_sql_query
 
 
+    def mart_ds_sodastream_campaign_last2y_sql() -> str:
+        return """SELECT * FROM data-warehouse-369301.dbt_mart_ds.mart_ds_sodastream_campaign_last2y_v"""
+
+
     def products_df_sql() -> str:
         products_df_sql_query = """
             SELECT * FROM dim.products

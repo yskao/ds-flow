@@ -218,3 +218,7 @@ class ExtractDataForTraining:
 
     def get_cylinder_points_df(self, bigquery_client: BigQueryClient) -> pd.DataFrame:
         return bigquery_client.query(CylinderSQL.gas_cylinder_points_sql()).result().to_dataframe()
+
+
+    def get_mart_ds_sodastream_campaign_last2y_df(self, bigquery_client: BigQueryClient) -> pd.DataFrame:
+        return bigquery_client.query(CylinderSQL.mart_ds_sodastream_campaign_last2y_sql()).result().to_dataframe()
