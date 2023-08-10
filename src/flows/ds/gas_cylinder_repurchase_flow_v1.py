@@ -8,18 +8,13 @@ import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
 from google.cloud.bigquery import LoadJobConfig, QueryJobConfig, ScalarQueryParameter
 from google.cloud.storage import Client as GCSClient
-from mllib.data_engineering import (
-    gen_dummies,
-    gen_repurchase_train_and_test_df
-)
+from mllib.data_engineering import gen_dummies, gen_repurchase_train_and_test_df
 from mllib.data_extraction import ExtractDataForTraining
-from mllib.ml_utils.utils import model_upload_to_gcs
 from mllib.ml_utils.cylinder_repurchase_utils import cal_cylinder_purchase_qty
+from mllib.ml_utils.utils import model_upload_to_gcs
 from mllib.repurchase.hlh_repurchase import HLHRepurchase
 from mllib.sql_query.soda_stream_repurchase_script import cdp_soda_stream_sql
 from prefect import flow, get_run_logger, task
-
-# from mllib.data_engineering import get_continuing_buying_weights
 
 from utils.gcp.client import get_bigquery_client, get_gcs_client
 from utils.prefect import generate_flow_name
@@ -54,14 +49,14 @@ source_map = {
 }
 
 mapping_combo_qty = {
-    "2入": 2, 
-    "3入": 3, 
-    "4入": 4, 
-    "5入": 5, 
-    "二入": 2, 
-    "三入": 3, 
-    "四入": 4, 
-    "五入": 5
+    "2入": 2,
+    "3入": 3,
+    "4入": 4,
+    "5入": 5,
+    "二入": 2,
+    "三入": 3,
+    "四入": 4,
+    "五入": 5,
 }
 
 @task(name="create_prediction_table_for_soda_stream")
@@ -146,11 +141,11 @@ def prepare_training_data(bigquery_client: BigQueryClient, assess_date: pd.Times
     )
     orders_correct_df = orders_df[orders_df["mobile"].isin(match_mobile)]
 
-    # 計算實際「鋼瓶」購買數量, 解 combo 
+    # 計算實際「鋼瓶」購買數量, 解 combo
     cylinder_purchase_qty_df = cal_cylinder_purchase_qty(
         orders_df=orders_correct_df,
         mapping_combo_qty=mapping_combo_qty,
-        assess_date=assess_date
+        assess_date=assess_date,
     ).rename(columns={"mobile": "Member_Mobile", "purchase_qty": "GasCylinders_Purchase_Qty"})
 
     logging.info("gen training and predicting data...")
@@ -199,12 +194,12 @@ def prepare_training_data(bigquery_client: BigQueryClient, assess_date: pd.Times
     pred_seasonal_df["mobile"] = pred_seasonal_df["mobile"].astype("category")
 
     return (
-        train_df, 
-        pred_df, 
-        train_seasonal_df, 
-        pred_seasonal_df, 
-        all_cycle_period_df, 
-        cylinder_purchase_qty_df
+        train_df,
+        pred_df,
+        train_seasonal_df,
+        pred_seasonal_df,
+        all_cycle_period_df,
+        cylinder_purchase_qty_df,
     )
 
 
@@ -319,7 +314,7 @@ def gen_cdp_soda_stream_data_to_bq(bigquery_client: BigQueryClient):
 def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
     """Flow for ds.ds_sodastream_prediction."""
     bigquery_client = get_bigquery_client()
-    gcs_client = get_gcs_client()
+    get_gcs_client()
     get_cylinder_data_model = ExtractDataForTraining()
     member_cylinder_points_df = (
         get_cylinder_data_model.get_cylinder_points_df(bigquery_client)
@@ -341,8 +336,8 @@ def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
     assess_date = pd.Timestamp.now("Asia/Taipei").tz_localize(None)
     seasonal_value = (assess_date + pd.DateOffset(days=1)).quarter
 
-    (train_df, pred_df, train_seasonal_df, 
-     pred_seasonal_df, all_cycle_period_df, 
+    (train_df, pred_df, train_seasonal_df,
+     pred_seasonal_df, all_cycle_period_df,
      cylinder_purchase_qty_df) = prepare_training_data(
         bigquery_client=bigquery_client,
         assess_date=assess_date,
@@ -390,12 +385,13 @@ def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
         )
         .rename(bq_columns, axis="columns")
     )
-    
-    # to-do
-    bq_df = pd.concat((bq_df, no_cycle_period_member_df), axis=0)
-    bq_df.loc[bq_df.duplicated("Member_Mobile", keep="last"), ["Repurchase_Possibility", "Repurchase_Flag"]] = [np.nan, 0] # 保留無週期
-    bq_df = bq_df.drop_duplicates("Member_Mobile", keep="first").reset_index(drop=True)
-        
+
+    bq_df = (
+        pd.concat((bq_df, no_cycle_period_member_df), axis=0)
+        .drop_duplicates("Member_Mobile")
+        .reset_index(drop=True)
+    )
+
     # 加入季節性的用戶到原本預測的用戶中
     bq_df_has_seasonal_probability = (
         bq_df.loc[bq_df["Member_Mobile"].isin(pred_seasonal_result["Member_Mobile"]), "Repurchase_Possibility"].dropna())
@@ -410,7 +406,6 @@ def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
         pred_seasonal_result["Repurchase_Possibility"])
     bq_df["Repurchase_Flag"] = np.where(bq_df["Repurchase_Possibility"]>=0.5, 1, 0)
     bq_df["ETL_Datetime"] = bq_df["ETL_Datetime"].fillna(method="ffill")
-    bq_df.to_csv("/Users/yushengkao/hlh/ds-flow/src/jupyter/repurchase/data/cylinder/bq_df_no_point.csv", index=False)
 
     # 新增集點資料 - 沒有點數的會員補 0
     # 新增過去兩年鋼瓶活動資料(包含優惠券、點數使用)
@@ -422,17 +417,12 @@ def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
         .merge(cylinder_purchase_qty_df, on="Member_Mobile", how="left")
     ).fillna({
         "Member_GasCylindersReward_Point": 0, "GasCylinders_Purchase_Qty": 0})
-    bq_df.to_csv("/Users/yushengkao/hlh/ds-flow/src/jupyter/repurchase/data/cylinder/bq_df_point.csv", index=False)
+
     delete_assess_date_duplicate(bigquery_client, assess_date)
     upload_df_to_bq(bigquery_client, bq_df)
     # 從 bq 抓資料計算再另存 table
-    # gen_cdp_soda_stream_data_to_bq(bigquery_client)
     # save model
     # store_trained_model_to_gcs(
-    #     model=ml_model,
-    #     model_version=assess_date.strftime("%Y-%m-%d"),
-    #     gcs_client=gcs_client,
-    # )
 
 if __name__ == "__main__":
     gas_cylinder_repurchase_flow_v1(True)

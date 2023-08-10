@@ -8,10 +8,7 @@ import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
 from google.cloud.bigquery import LoadJobConfig, QueryJobConfig, ScalarQueryParameter
 from google.cloud.storage import Client as GCSClient
-from mllib.data_engineering import (
-    gen_dummies,
-    gen_repurchase_train_and_test_df
-)
+from mllib.data_engineering import gen_dummies, gen_repurchase_train_and_test_df
 from mllib.data_extraction import ExtractDataForTraining
 from mllib.ml_utils.utils import model_upload_to_gcs
 from mllib.repurchase.hlh_repurchase import HLHRepurchase
@@ -330,7 +327,7 @@ def gas_cylinder_repurchase_flow(init: bool = False) -> None:
     )
 
     bq_df = pd.concat((bq_df, no_cycle_period_member_df), axis=0).reset_index(drop=True)
-    
+
     # 加入季節性的用戶到原本預測的用戶中
     bq_df_has_seasonal_probability = (
         bq_df.loc[bq_df["Member_Mobile"].isin(pred_seasonal_result["Member_Mobile"]), "Repurchase_Possibility"].dropna())
