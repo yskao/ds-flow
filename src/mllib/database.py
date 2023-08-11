@@ -27,3 +27,8 @@ def connect_to_mssql(
         connect_args=connect_args,
         fast_executemany=True,
     ).connect()
+
+if __name__ == "__main__":
+    import pandas as pd
+    with connect_to_mssql("hlh_dw") as conn:
+        result = pd.read_sql("SELECT * FROM dim_brands", conn)
