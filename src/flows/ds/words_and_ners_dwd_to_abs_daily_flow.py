@@ -1,10 +1,10 @@
 """
 目的: VOC 文字雲 ETL
-輸出: HLH_DW.dbo.ads_survey_answers_word_segmentation, ads_survey_answers_named_entity_recognition.
+輸出: ads_survey_answers_word_segmentation, ads_survey_answers_named_entity_recognition.
 """
 import pandas as pd
 from ckip_transformers.nlp import CkipNerChunker, CkipPosTagger, CkipWordSegmenter
-from mllib.database import connect_to_mssql
+from google.cloud.bigquery import Client as BigQueryClient
 from mllib.ml_utils.utils import upload_df_to_bq
 from mllib.sql_query.word_pos_ner_script import (
     create_ads_survey_answers_named_entity_recognition,
@@ -16,28 +16,35 @@ from utils.gcp.client import get_bigquery_client
 from utils.prefect import generate_flow_name
 
 
-@task(name="with_seasonal_training")
-def e_dwd_survey_answers() -> pd.DataFrame:
+@task(name="dwd_survey_answers")
+def dwd_survey_answers(bigquery_client: BigQueryClient) -> pd.DataFrame:
     """取得survey資料."""
     logging = get_run_logger()
-    sql = """
-    SELECT answer_id,
-        answer_content
-    FROM dwd_survey_answers
-    WHERE question_id IN (
-        '984988b1-0916-5731-aeef-85973b7f078d',
-        '70d4ee9d-293d-5a8d-99ca-4b7b29e29f95',
-        'e6ada374-b6e8-54b0-8a6c-ffc6d66b2808')
-        AND answer_content <> ''
-        AND answer_id NOT IN (
-            SELECT DISTINCT answer_id
-            FROM ads_survey_answers_word_segmentation
-            )
+    survey_answers_sql = """
+        WITH source AS (
+            SELECT
+                answer_id,
+                REGEXP_REPLACE(answer_content, '\\\\p{So}', '') AS answer_content
+            FROM data-warehouse-369301.DS.dwd_survey_answers
+            WHERE question_id IN (
+                '984988b1-0916-5731-aeef-85973b7f078d',
+                '70d4ee9d-293d-5a8d-99ca-4b7b29e29f95',
+                'e6ada374-b6e8-54b0-8a6c-ffc6d66b2808')
+                AND TRIM(answer_content) <> ''
+        )
+
+        , word_segmentation AS (
+            SELECT DISTINCT
+                answer_id
+            FROM data-warehouse-369301.DS.ads_survey_answers_word_segmentation
+        )
+
+        SELECT * FROM source
+        WHERE answer_id NOT IN (SELECT answer_id FROM word_segmentation)
+            AND TRIM(answer_content) <> ''
     """
-    logging.info("start to prepare survey_answers data...")
-    with connect_to_mssql("hlh_dw") as conn:
-        answers_df = pd.read_sql(sql, conn)
-    return answers_df
+    logging.info("start to prepare survey answers data...")
+    return bigquery_client.query(survey_answers_sql).result().to_dataframe()
 
 
 def gen_ws_and_pos(answers_df: pd.DataFrame) -> pd.DataFrame:
@@ -93,8 +100,9 @@ def gen_words_and_ners(answers_df: pd.DataFrame) -> pd.DataFrame:
 @flow(name=generate_flow_name())
 def words_and_ners_dwd_to_ads_daily_flow(init: bool = False) -> None:
     """Flow for words_and_ners."""
+    logging = get_run_logger()
     bigquery_client = get_bigquery_client()
-    answers_df = e_dwd_survey_answers()
+    answers_df = dwd_survey_answers(bigquery_client)
     assess_date = pd.Timestamp.now("Asia/Taipei").tz_localize(None).strftime("%Y-%m-%d")
 
     if init:
@@ -102,15 +110,17 @@ def words_and_ners_dwd_to_ads_daily_flow(init: bool = False) -> None:
         create_ads_survey_answers_named_entity_recognition(bigquery_client)
 
     if len(answers_df) > 0:
-        words_df = (
-            gen_ws_and_pos(answers_df)
-            .insert(loc=0, column="assess_date", value=assess_date)
-        )
-        ners_df = (
-            gen_words_and_ners(answers_df)
-            .insert(loc=0, column="assess_date", value=assess_date)
-        )
+        logging.info("length of answer_df >= 1, then feeding into model")
+        logging.info("implement ws_pos")
+        words_df = gen_ws_and_pos(answers_df)
+        words_df.insert(loc=0, column="assess_date", value=assess_date)
+
+        logging.info("implement words_ners")
+        ners_df = gen_words_and_ners(answers_df)
+        ners_df.insert(loc=0, column="assess_date", value=assess_date)
+
         # 上傳資料到 BQ
+        logging.info("upload_df_to_bq ws_pos")
         upload_df_to_bq(
             bigquery_client=bigquery_client,
             upload_df=words_df,
@@ -118,6 +128,7 @@ def words_and_ners_dwd_to_ads_daily_flow(init: bool = False) -> None:
             bq_project="data-warehouse-369301",
             write_disposition="WRITE_APPEND",
         )
+        logging.info("upload_df_to_bq words_ners")
         upload_df_to_bq(
             bigquery_client=bigquery_client,
             upload_df=ners_df,
@@ -125,6 +136,10 @@ def words_and_ners_dwd_to_ads_daily_flow(init: bool = False) -> None:
             bq_project="data-warehouse-369301",
             write_disposition="WRITE_APPEND",
         )
+    else:
+        logging.info("no data to upload")
+
+
 
 if __name__ == "__main__":
-    words_and_ners_dwd_to_ads_daily_flow(True)
+    words_and_ners_dwd_to_ads_daily_flow(False)
