@@ -103,9 +103,9 @@ def insert_new_row(
     insert_row = []
     # 變更公式、洗掉數值
     for ele in current_row:
-        if type(ele) == str and "=" in ele:
+        if isinstance(ele, str) and "=" in ele:
             data = ele.replace(str(idx), str(idx + 1))
-        elif type(ele) == int:
+        elif isinstance(ele, int) == int:
             data = ""
         else:
             data = ele
