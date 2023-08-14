@@ -105,7 +105,8 @@ def insert_new_row(
     for ele in current_row:
         if isinstance(ele, str) and "=" in ele:
             data = ele.replace(str(idx), str(idx + 1))
-        elif isinstance(ele, int) == int:
+        elif isinstance(ele, int):
+
             data = ""
         else:
             data = ele
