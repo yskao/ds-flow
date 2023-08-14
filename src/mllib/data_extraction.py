@@ -211,10 +211,17 @@ class ExtractDataForTraining:
                 sales_quantity=lambda df: pd.to_numeric(df["sales_quantity"]),
             )
             .loc[lambda df: df["mobile"].apply(lambda x: len(str(x)) == 10)]
+            .loc[lambda df: ~df["mobile"].str.contains(r"/|[a-zA-Z]+")]
             .loc[lambda df: df["order_date"].apply(lambda x: type(x) == pd.Timestamp)]
+            # SD9001003A (SODASTREAM 回收快扣空鋼瓶) 37010303 (SODASTREAM 二氧化碳回收空鋼瓶).
+            .loc[lambda df: ~(df["product_name"].str.contains("回收", na=False) & (df["sku"].isin(["SD9001003A", "37010303"])))]
         )
         return orders_df
 
 
     def get_cylinder_points_df(self, bigquery_client: BigQueryClient) -> pd.DataFrame:
         return bigquery_client.query(CylinderSQL.gas_cylinder_points_sql()).result().to_dataframe()
+
+
+    def get_mart_ds_sodastream_campaign_last2y_df(self, bigquery_client: BigQueryClient) -> pd.DataFrame:
+        return bigquery_client.query(CylinderSQL.mart_ds_sodastream_campaign_last2y_sql()).result().to_dataframe()
