@@ -20,6 +20,7 @@ scikit-learn = "*"
 statsmodels = "*"
 pygsheets = "*"
 tqdm = "*"
+ckip-transformers = "*"
 
 [dev-packages]
 flake8 = "*"

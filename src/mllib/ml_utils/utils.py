@@ -5,11 +5,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+from google.cloud.bigquery import LoadJobConfig
 
 from mllib.data_engineering import add_product_id_combo_column
 from utils.google_sheets import get_google_sheet_client
 
 if TYPE_CHECKING:
+    from google.cloud.bigquery import Client as BigQueryClient
     from google.cloud.storage import Client as GCSClient
 
 
@@ -186,3 +188,20 @@ def model_download_from_gcs(
     bucket = gcs_client.get_bucket(bucket_name)
     blob = bucket.blob(gcs_model_path)
     return blob.download_to_filename(local_model_path)
+
+
+def upload_df_to_bq(
+        bigquery_client: BigQueryClient,
+        upload_df: pd.DataFrame,
+        bq_table: str,
+        bq_project: str,
+        write_disposition: str = "WRITE_APPEND",
+) -> str:
+    """上傳資料到 BQ."""
+    job = bigquery_client.load_table_from_dataframe(
+        dataframe=upload_df,
+        destination=bq_table,
+        project=bq_project,
+        job_config=LoadJobConfig(write_disposition=write_disposition),
+    ).result()
+    return job.state
