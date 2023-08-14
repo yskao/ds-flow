@@ -1,6 +1,6 @@
 """
 TODO(<Sam>): 目前的資料源使用的是 DS 裡面設定的資料,後續 uu 將 surveycake 的資料源移轉至 BQ,再進行更換
-https://app.asana.com/0/1202942986616169/1205254747138041/f.
+https://app.asana.com/0/0/1205256139575231/f.
 
 目的: VOC 文字雲 ETL
 輸出: ads_survey_answers_word_segmentation, ads_survey_answers_named_entity_recognition.
