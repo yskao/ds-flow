@@ -425,4 +425,4 @@ def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
     # store_trained_model_to_gcs(
 
 if __name__ == "__main__":
-    gas_cylinder_repurchase_flow_v1(True)
+    gas_cylinder_repurchase_flow_v1(False)
