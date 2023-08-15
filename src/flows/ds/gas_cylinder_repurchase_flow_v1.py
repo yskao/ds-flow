@@ -1,4 +1,7 @@
-
+"""
+TODO<Sam> gas_cylinder_repurchase_flow_v1.py 修正 gas_cylinder_repurchase_flow_v1
+https://app.asana.com/0/1202942986616169/1205265288881501/f.
+"""
 from pathlib import Path
 from typing import TypeVar
 
@@ -6,14 +9,18 @@ import joblib
 import numpy as np
 import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
-from google.cloud.bigquery import LoadJobConfig, QueryJobConfig, ScalarQueryParameter
+from google.cloud.bigquery import QueryJobConfig, ScalarQueryParameter
 from google.cloud.storage import Client as GCSClient
 from mllib.data_engineering import gen_dummies, gen_repurchase_train_and_test_df
 from mllib.data_extraction import ExtractDataForTraining
 from mllib.ml_utils.cylinder_repurchase_utils import cal_cylinder_purchase_qty
-from mllib.ml_utils.utils import model_upload_to_gcs
+from mllib.ml_utils.utils import model_upload_to_gcs, upload_df_to_bq
 from mllib.repurchase.hlh_repurchase import HLHRepurchase
-from mllib.sql_query.soda_stream_repurchase_script import cdp_soda_stream_sql
+from mllib.sql_query.soda_stream_repurchase_script import (
+    cdp_soda_stream_campaign_sql,
+    cdp_soda_stream_sql,
+    cdp_soda_stream_sql_v1,
+)
 from prefect import flow, get_run_logger, task
 
 from utils.gcp.client import get_bigquery_client, get_gcs_client
@@ -293,21 +300,19 @@ def delete_assess_date_duplicate(bigquery_client: BigQueryClient, assess_date: p
     ).result()
 
 
-@task(name="data_upload_to_bq")
-def upload_df_to_bq(bigquery_client: BigQueryClient, upload_df: pd.DataFrame) -> str:
-    """上傳資料到 BQ."""
-    job = bigquery_client.load_table_from_dataframe(
-        dataframe=upload_df,
-        destination="DS.DS_SodaStream_Prediction_v1",
-        project="data-warehouse-369301",
-        job_config=LoadJobConfig(write_disposition="WRITE_APPEND"),
-    ).result()
-    return job.state
-
-
 @task(name="gen_cdp_required_data")
 def gen_cdp_soda_stream_data_to_bq(bigquery_client: BigQueryClient):
     return bigquery_client.query(cdp_soda_stream_sql()).result()
+
+
+@task(name="gen_cdp_required_data_v1")
+def gen_cdp_soda_stream_data_to_bq_v1(bigquery_client: BigQueryClient):
+    return bigquery_client.query(cdp_soda_stream_sql_v1()).result()
+
+
+@task(name="gen_cdp_required_campaign_data")
+def gen_cdp_soda_stream_campaign_data_to_bq(bigquery_client: BigQueryClient):
+    return bigquery_client.query(cdp_soda_stream_campaign_sql()).result()
 
 
 @flow(name=generate_flow_name())
@@ -417,9 +422,20 @@ def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
         .merge(cylinder_purchase_qty_df, on="Member_Mobile", how="left")
     ).fillna({
         "Member_GasCylindersReward_Point": 0, "GasCylinders_Purchase_Qty": 0})
-
+    # prediction data 上傳資料到 bq
     delete_assess_date_duplicate(bigquery_client, assess_date)
-    upload_df_to_bq(bigquery_client, bq_df)
+    upload_df_to_bq(
+        bigquery_client=bigquery_client,
+        upload_df=bq_df,
+        bq_table="DS.DS_SodaStream_Prediction_v1",
+        bq_project="data-warehouse-369301",
+    )
+
+    # 通知名單上傳到 BQ - CDP
+    gen_cdp_soda_stream_data_to_bq_v1(bigquery_client)
+    gen_cdp_soda_stream_campaign_data_to_bq(bigquery_client)
+
+
     # 從 bq 抓資料計算再另存 table
     # save model
     # store_trained_model_to_gcs(

@@ -1,4 +1,7 @@
-
+"""
+TODO<Sam> soda_stream_repurchase_script.py - cdp_soda_stream_sql_v1  and cdp_soda_stream_campaign_sql
+https://app.asana.com/0/1202942986616169/1205265288881501/f.
+"""
 
 class CylinderSQL:
     """soda stream bq script."""
@@ -214,41 +217,171 @@ class CylinderSQL:
 def cdp_soda_stream_sql() -> str:
     query = """
         CREATE OR REPLACE TABLE CDP.DS_SodaStream_Prediction AS
-        WITH ds_soda_stream_prediction AS (
-            SELECT * FROM data-warehouse-369301.DS.DS_SodaStream_Prediction
+        WITH source AS (
+            SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction`
             UNION ALL
-            SELECT * FROM data-warehouse-369301.DS.DS_SodaStream_Prediction_TestList
+            SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_TestList`
         )
+
+        , prediction AS (
+            SELECT
+                Member_Mobile AS identity_mobile,
+                CAST(Assess_Date AS STRING) AS soda_assess_date,
+                Member_GasCylindersReward_Point AS soda_gascylindersreward_point,
+                CAST(LastPurchase_Datetime AS STRING) AS soda_lastpurchase_datetime,
+                Repurchase_Flag AS soda_repurchase_flag,
+                Repurchase_Possibility AS soda_repurchase_possibility,
+                Avg_Duration_Day_Cnt AS soda_avgdurationday_cnt
+            FROM source
+            WHERE Assess_Date = CURRENT_DATE("Asia/Taipei")
+                AND Repurchase_Possibility IS NOT NULL
+        )
+
+        -- member
+        , dim_member AS (
+            SELECT
+                mobile,
+                counter
+            FROM `dim.members`
+        )
+
+        -- counter
+        , dim_counter AS (
+            SELECT
+                Counter_Code,
+                IF(ReplaceDyson_Counter_Code="", Counter_Code, ReplaceDyson_Counter_Code) AS soda_member_counter,
+            FROM `dim.counter`
+        )
+
+        , cdp_prediction AS (
+            SELECT * FROM prediction p
+            LEFT JOIN dim_member m ON p.identity_mobile = m.mobile
+            LEFT JOIN dim_counter c ON m.counter = c.Counter_Code
+
+        )
+
         SELECT
-            Member_Mobile AS identity_mobile,
-            CAST(Assess_Date AS STRING) AS soda_assess_date,
-            Member_GasCylindersReward_Point AS soda_gascylindersreward_point,
-            CAST(LastPurchase_Datetime AS STRING) AS soda_lastpurchase_datetime,
-            Repurchase_Flag AS soda_repurchase_flag,
-            Repurchase_Possibility AS soda_repurchase_possibility,
-            New_Counter_Code AS soda_member_counter,
-            Avg_Duration_Day_Cnt AS soda_avgdurationday_cnt
-        FROM ds_soda_stream_prediction
-        LEFT JOIN (
-        SELECT
-            mobile,
-            counter
-        FROM dim.members
-        ) AS dim_members
-        ON ds_soda_stream_prediction.Member_Mobile = dim_members.mobile
-        LEFT JOIN (
-        SELECT
-            Counter_Code,
-            (
-                CASE
-                    WHEN ReplaceDyson_Counter_Code='' THEN Counter_Code
-                    ELSE ReplaceDyson_Counter_Code
-                END
-            ) AS New_Counter_Code
-            FROM dim.counter
-        ) AS dim_counter
-        ON dim_members.counter = dim_counter.Counter_Code
-        WHERE Assess_Date = CURRENT_DATE("Asia/Taipei")
-        AND Repurchase_Possibility IS NOT NULL;
+            identity_mobile,
+            soda_assess_date,
+            soda_gascylindersreward_point,
+            soda_lastpurchase_datetime,
+            soda_repurchase_flag,
+            soda_repurchase_possibility,
+            soda_member_counter,
+            soda_avgdurationday_cnt
+        FROM cdp_prediction
         """
+    return query
+
+
+def cdp_soda_stream_sql_v1() -> str:
+    query = """
+        CREATE OR REPLACE TABLE CDP.DS_SodaStream_Prediction_v1 AS (
+            WITH source AS (
+                SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_v1`
+                UNION ALL
+                SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_TestList_v1`
+            )
+
+            , prediction AS (
+                SELECT
+                    Member_Mobile AS identity_mobile,
+                    CAST(Assess_Date AS STRING) AS soda_assess_date,
+                    Member_GasCylindersReward_Point AS soda_gascylindersreward_point,
+                    CAST(LastPurchase_Datetime AS STRING) AS soda_lastpurchase_datetime,
+                    Repurchase_Flag AS soda_repurchase_flag,
+                    Repurchase_Possibility AS soda_repurchase_possibility,
+                    Avg_Duration_Day_Cnt AS soda_avgdurationday_cnt
+                FROM source
+                WHERE Assess_Date = CURRENT_DATE("Asia/Taipei")
+                    AND Repurchase_Possibility IS NOT NULL
+            )
+
+            -- member
+            , dim_member AS (
+                SELECT
+                    mobile,
+                    counter
+                FROM `dim.members`
+            )
+
+            -- counter
+            , dim_counter AS (
+                SELECT
+                    Counter_Code,
+                    IF(ReplaceDyson_Counter_Code="", Counter_Code, ReplaceDyson_Counter_Code) AS soda_member_counter,
+                FROM `dim.counter`
+            )
+
+            , cdp_prediction AS (
+                SELECT * FROM prediction p
+                LEFT JOIN dim_member m ON p.identity_mobile = m.mobile
+                LEFT JOIN dim_counter c ON m.counter = c.Counter_Code
+
+            )
+
+            SELECT
+                identity_mobile,
+                soda_assess_date,
+                soda_gascylindersreward_point,
+                soda_lastpurchase_datetime,
+                soda_repurchase_flag,
+                soda_repurchase_possibility,
+                soda_member_counter,
+                soda_avgdurationday_cnt
+            FROM cdp_prediction
+        )
+        """
+    return query
+
+
+def cdp_soda_stream_campaign_sql() -> str:
+
+    query = """
+        CREATE OR REPLACE TABLE CDP.DS_SodaStream_Campaign_v1 AS (
+            WITH source AS (
+                SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_v1`
+                UNION ALL
+                SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_TestList_v1`
+            )
+
+            -- prediction
+            , campaign AS (
+                SELECT
+                    Member_Mobile AS identity_mobile,
+                    CAST(Assess_Date AS STRING) AS soda_assess_date,
+                    CAST(TY_Campaign_Year_ID AS STRING) AS soda_ty_campaign_year_id,
+                    CAST(TY_Point_All_Cnt AS INTEGER) AS soda_ty_point_all_cnt,
+                    CAST(TY_Point_ToCoupon_Cnt AS INTEGER) AS soda_ty_point_tocoupon_cnt,
+                    CAST(TY_Point_Used_Cnt AS INTEGER) AS soda_ty_point_used_cnt,
+                    CAST(TY_Point_Unused_Cnt AS INTEGER) AS soda_ty_point_unused_cnt,
+                    CAST(TY_Point_UnusedWOCoupon_Cnt AS INTEGER) AS soda_ty_point_unusedwocoupon_cnt,
+                    CAST(TY_Coupon_Sent_Cnt AS INTEGER) AS soda_ty_coupon_sent_cnt,
+                    CAST(TY_Coupon_Used_Cnt AS INTEGER) AS soda_ty_coupon_used_cnt,
+                    CAST(TY_Coupon_Unused_Cnt AS INTEGER) AS soda_ty_coupon_unused_cnt,
+                    CAST(TY_Coupon_Sent_ID AS STRING) AS soda_ty_coupon_sent_id,
+                    CAST(TY_Coupon_Used_ID AS STRING) AS soda_ty_coupon_used_id,
+                    CAST(TY_Coupon_Unused_ID AS STRING) AS soda_ty_coupon_unused_id,
+                    CAST(TY_Coupon_Exp_Date AS DATE) AS soda_ty_coupon_exp_date,
+                    CAST(LY_Campaign_Year_ID AS STRING) AS soda_ly_campaign_Year_id,
+                    CAST(LY_Point_All_Cnt AS INTEGER) AS soda_ly_point_all_cnt,
+                    CAST(LY_Point_ToCoupon_Cnt AS INTEGER) AS soda_ly_point_tocoupon_cnt,
+                    CAST(LY_Point_Used_Cnt AS INTEGER) AS soda_ly_point_used_cnt,
+                    CAST(LY_Point_Unused_Cnt AS INTEGER) AS soda_ly_point_unused_cnt,
+                    CAST(LY_Point_UnusedWOCoupon_Cnt AS INTEGER) AS soda_ly_point_unusedwocoupon_cnt,
+                    CAST(LY_Coupon_Sent_Cnt AS INTEGER) AS soda_ly_coupon_sent_cnt,
+                    CAST(LY_Coupon_Used_Cnt AS INTEGER) AS soda_ly_coupon_used_cnt,
+                    CAST(LY_Coupon_Unused_Cnt AS INTEGER) AS soda_ly_coupon_unused_cnt,
+                    CAST(LY_Coupon_Sent_ID AS STRING) AS soda_ly_coupon_sent_id,
+                    CAST(LY_Coupon_Used_ID AS STRING) AS soda_ly_coupon_used_id,
+                    CAST(LY_Coupon_Unused_ID AS STRING) AS soda_ly_coupon_unused_id,
+                    CAST(LY_Coupon_Exp_Date AS DATE) AS soda_ly_coupon_exp_date
+                FROM source
+                WHERE Assess_Date = CURRENT_DATE("Asia/Taipei")
+                    AND Repurchase_Possibility IS NOT NULL
+            )
+
+            SELECT * FROM campaign
+        )
+    """
     return query
