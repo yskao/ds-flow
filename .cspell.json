@@ -6,5 +6,9 @@
         "PYTHONPATH",
         "mllib",
         "dateutil",
+        "joblib",
+        "astype",
+        "sodastream",
+        "fillna",
     ]
 }
