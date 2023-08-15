@@ -1,42 +1,42 @@
 {
-    "build": {
-      "dockerfile": "../dev.Dockerfile"
-    },
-    "customizations": {
-      "vscode": {
-        "extensions": [
-          "streetsidesoftware.code-spell-checker",
-          "donjayamanne.githistory",
-          "eamodio.gitlens",
-          "ms-python.vscode-pylance",
-          "charliermarsh.ruff",
-          "shardulm94.trailing-spaces",
-          "vivaxy.vscode-conventional-commits",
-          "shinichi-takii.sql-bigquery",
-          "ms-toolsai.jupyter",
-          "ms-python.black-formatter",
-          "mhutchie.git-graph",
-        ],
-        "settings": {
-          "terminal.integrated.defaultProfile.linux": "zsh",
-          "editor.tabSize": 4,
-            "[python]": {
-              "editor.codeActionsOnSave": {
-                "editor.formatOnSave": true,
-                "source.unusedImports": true,
-                "source.organizeImports": true
-              },
-              "python.formatting.provider": "black"
-            }
-        }
+  "build": {
+    "dockerfile": "../dev.Dockerfile"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "streetsidesoftware.code-spell-checker",
+        "donjayamanne.githistory",
+        "eamodio.gitlens",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "shardulm94.trailing-spaces",
+        "vivaxy.vscode-conventional-commits",
+        "shinichi-takii.sql-bigquery",
+        "ms-toolsai.jupyter",
+        "ms-python.black-formatter",
+        "mhutchie.git-graph",
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "editor.tabSize": 4,
+          "[python]": {
+            "editor.codeActionsOnSave": {
+              "editor.formatOnSave": true,
+              "source.unusedImports": false,
+              "source.organizeImports": true
+            },
+            "python.formatting.provider": "black"
+          }
       }
-    },
-    "mounts": [
-      "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,type=bind,consistency=cached",
-      "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached"
-    ],
-    "remoteEnv": {
-      "PYTHONPATH": "/workspaces/ds-flow/src"
-    },
-    "postCreateCommand": "zsh && pre-commit install"
-  }
+    }
+  },
+  "mounts": [
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,type=bind,consistency=cached",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached"
+  ],
+  "remoteEnv": {
+    "PYTHONPATH": "/workspaces/ds-flow/src"
+  },
+  "postCreateCommand": "zsh && pre-commit install"
+}

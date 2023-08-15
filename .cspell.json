@@ -3,6 +3,8 @@
         "gsheet",
         "donjayamanne",
         "githistory",
-        "PYTHONPATH"
+        "PYTHONPATH",
+        "mllib",
+        "dateutil",
     ]
 }
