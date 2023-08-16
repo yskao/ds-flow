@@ -338,7 +338,7 @@ def cdp_soda_stream_sql_v1() -> str:
 def cdp_soda_stream_campaign_sql() -> str:
     ### CDP 先暫時不放,先放 DS
     query = """
-        CREATE OR REPLACE TABLE DS_SodaStream_Campaign_v1 AS (
+        CREATE OR REPLACE TABLE DS.DS_SodaStream_Campaign_v1 AS (
             WITH source AS (
                 SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_v1`
                 UNION ALL
