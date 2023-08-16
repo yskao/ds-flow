@@ -276,7 +276,7 @@ def cdp_soda_stream_sql() -> str:
 
 def cdp_soda_stream_sql_v1() -> str:
     query = """
-        CREATE OR REPLACE TABLE CDP.DS_SodaStream_Prediction_v1 AS (
+        CREATE OR REPLACE TABLE DS.DS_SodaStream_Prediction_v1 AS (
             WITH source AS (
                 SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_v1`
                 UNION ALL
@@ -349,7 +349,6 @@ def cdp_soda_stream_campaign_sql() -> str:
             , campaign AS (
                 SELECT
                     Member_Mobile AS identity_mobile,
-                    CAST(Assess_Date AS STRING) AS soda_assess_date,
                     CAST(TY_Campaign_Year_ID AS STRING) AS soda_ty_campaign_year_id,
                     CAST(TY_Point_All_Cnt AS INTEGER) AS soda_ty_point_all_cnt,
                     CAST(TY_Point_ToCoupon_Cnt AS INTEGER) AS soda_ty_point_tocoupon_cnt,
