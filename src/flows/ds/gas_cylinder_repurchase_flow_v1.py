@@ -431,10 +431,8 @@ def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
         bq_project="data-warehouse-369301",
     )
 
-    # 通知名單上傳到 BQ - CDP
-    gen_cdp_soda_stream_data_to_bq_v1(bigquery_client)
+    # 通知名單上傳到 BQ - CDP # gen_cdp_soda_stream_data_to_bq_v1(bigquery_client).
     gen_cdp_soda_stream_campaign_data_to_bq(bigquery_client)
-
 
     # 從 bq 抓資料計算再另存 table
     # save model
