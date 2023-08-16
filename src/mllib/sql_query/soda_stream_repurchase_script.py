@@ -349,7 +349,6 @@ def cdp_soda_stream_campaign_sql() -> str:
             , campaign AS (
                 SELECT
                     Member_Mobile AS identity_mobile,
-                    CAST(Assess_Date AS STRING) AS soda_assess_date,
                     CAST(TY_Campaign_Year_ID AS STRING) AS soda_ty_campaign_year_id,
                     CAST(TY_Point_All_Cnt AS INTEGER) AS soda_ty_point_all_cnt,
                     CAST(TY_Point_ToCoupon_Cnt AS INTEGER) AS soda_ty_point_tocoupon_cnt,
