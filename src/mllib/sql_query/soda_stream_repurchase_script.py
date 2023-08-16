@@ -276,7 +276,7 @@ def cdp_soda_stream_sql() -> str:
 
 def cdp_soda_stream_sql_v1() -> str:
     query = """
-        CREATE OR REPLACE TABLE CDP.DS_SodaStream_Prediction_v1 AS (
+        CREATE OR REPLACE TABLE DS.DS_SodaStream_Prediction_v1 AS (
             WITH source AS (
                 SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_v1`
                 UNION ALL
