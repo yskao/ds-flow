@@ -361,7 +361,7 @@ def cdp_soda_stream_campaign_sql() -> str:
                     CAST(TY_Coupon_Sent_ID AS STRING) AS soda_ty_coupon_sent_id,
                     CAST(TY_Coupon_Used_ID AS STRING) AS soda_ty_coupon_used_id,
                     CAST(TY_Coupon_Unused_ID AS STRING) AS soda_ty_coupon_unused_id,
-                    CAST(TY_Coupon_Exp_Date AS DATE) AS soda_ty_coupon_exp_date,
+                    CAST(TY_Coupon_Exp_Date AS STRING) AS soda_ty_coupon_exp_date,
                     CAST(LY_Campaign_Year_ID AS STRING) AS soda_ly_campaign_Year_id,
                     CAST(LY_Point_All_Cnt AS INTEGER) AS soda_ly_point_all_cnt,
                     CAST(LY_Point_ToCoupon_Cnt AS INTEGER) AS soda_ly_point_tocoupon_cnt,
@@ -374,7 +374,7 @@ def cdp_soda_stream_campaign_sql() -> str:
                     CAST(LY_Coupon_Sent_ID AS STRING) AS soda_ly_coupon_sent_id,
                     CAST(LY_Coupon_Used_ID AS STRING) AS soda_ly_coupon_used_id,
                     CAST(LY_Coupon_Unused_ID AS STRING) AS soda_ly_coupon_unused_id,
-                    CAST(LY_Coupon_Exp_Date AS DATE) AS soda_ly_coupon_exp_date
+                    CAST(LY_Coupon_Exp_Date AS STRING) AS soda_ly_coupon_exp_date
                 FROM source
                 WHERE Assess_Date = CURRENT_DATE("Asia/Taipei")
                     AND Repurchase_Possibility IS NOT NULL
