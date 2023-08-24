@@ -75,6 +75,7 @@ def create_ds_soda_stream_prediction_table(bigquery_client: BigQueryClient) -> N
                 ETL_Datetime DATETIME NOT NULL OPTIONS(description="ETL執行日期"),
                 Assess_Date DATE NOT NULL OPTIONS(description="模型執行日期"),
                 Member_Mobile STRING NOT NULL OPTIONS(description="會員手機號碼"),
+                User_Mask_Mobile STRING OPTIONS(description="顧客遮罩後手機號碼"),
                 Member_GasCylindersReward_Point INT64 OPTIONS(description="鋼瓶集點數"),
                 GasCylinders_Purchase_Qty INT64 OPTIONS(description="今年鋼瓶購買數量"),
                 Chan_HS91App_Day_Cnt INT64 OPTIONS(description="累計從線上91APP的購買天數"),
@@ -94,7 +95,7 @@ def create_ds_soda_stream_prediction_table(bigquery_client: BigQueryClient) -> N
                 Repurchase_Possibility FLOAT64 OPTIONS(description="區間內購買機率"),
                 TY_Campaign_Year_ID STRING OPTIONS(description="今年參加活動年份"),
                 TY_Point_All_Cnt INTEGER OPTIONS(description="今年所有得到的點數"),
-                TY_Point_ToCoupon_Cnt INTEGER OPTIONS(description="今年已轉換為優惠券的點數"),
+                TY_Point_UpperLimit_Cnt INTEGER OPTIONS(description="今年優惠券上限點數"),
                 TY_Point_Used_Cnt INTEGER OPTIONS(description="今年扣除已使用優惠券的點數"),
                 TY_Point_Unused_Cnt INTEGER OPTIONS(description="今年未使用優惠券的點數"),
                 TY_Point_UnusedWOCoupon_Cnt INTEGER OPTIONS(description="今年扣除所有優惠券的點數"),
@@ -104,10 +105,11 @@ def create_ds_soda_stream_prediction_table(bigquery_client: BigQueryClient) -> N
                 TY_Coupon_Sent_ID STRING OPTIONS(description="今年已發送的優惠券序號"),
                 TY_Coupon_Used_ID STRING OPTIONS(description="今年已使用的優惠券序號"),
                 TY_Coupon_Unused_ID STRING OPTIONS(description="今年未使用的優惠券序號"),
+                TY_Coupon_LastCreated_DT DATETIME OPTIONS(description="今年最新優惠券產出日期"),
                 TY_Coupon_Exp_Date DATE OPTIONS(description="今年優惠券失效日"),
                 LY_Campaign_Year_ID STRING OPTIONS(description="去年參加活動年份"),
                 LY_Point_All_Cnt INTEGER OPTIONS(description="去年所有得到的點數"),
-                LY_Point_ToCoupon_Cnt INTEGER OPTIONS(description="去年已轉換為優惠券的點數"),
+                LY_Point_UpperLimit_Cnt INTEGER OPTIONS(description="去年優惠券上限點數"),
                 LY_Point_Used_Cnt INTEGER OPTIONS(description="去年扣除已使用優惠券的點數"),
                 LY_Point_Unused_Cnt INTEGER OPTIONS(description="去年未使用優惠券的點數"),
                 LY_Point_UnusedWOCoupon_Cnt INTEGER OPTIONS(description="去年扣除所有優惠券的點數"),
@@ -117,6 +119,7 @@ def create_ds_soda_stream_prediction_table(bigquery_client: BigQueryClient) -> N
                 LY_Coupon_Sent_ID STRING OPTIONS(description="去年已發送的優惠券序號"),
                 LY_Coupon_Used_ID STRING OPTIONS(description="去年已使用的優惠券序號"),
                 LY_Coupon_Unused_ID STRING OPTIONS(description="去年未使用的優惠券序號"),
+                LY_Coupon_LastCreated_DT DATETIME OPTIONS(description="去年最新優惠券產出日期"),
                 LY_Coupon_Exp_Date DATE OPTIONS(description="去年優惠券失效日")
             )
             PARTITION BY Assess_Date

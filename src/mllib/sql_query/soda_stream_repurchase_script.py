@@ -349,9 +349,10 @@ def cdp_soda_stream_campaign_sql() -> str:
             , campaign AS (
                 SELECT
                     Member_Mobile AS identity_mobile,
+                    CAST(User_Mask_Mobile AS STRING) AS user_mask_mobile,
                     CAST(TY_Campaign_Year_ID AS STRING) AS soda_ty_campaign_year_id,
                     CAST(TY_Point_All_Cnt AS INTEGER) AS soda_ty_point_all_cnt,
-                    CAST(TY_Point_ToCoupon_Cnt AS INTEGER) AS soda_ty_point_tocoupon_cnt,
+                    CAST(TY_Point_UpperLimit_Cnt AS INTEGER) AS soda_ty_point_upperlimit_cnt,
                     CAST(TY_Point_Used_Cnt AS INTEGER) AS soda_ty_point_used_cnt,
                     CAST(TY_Point_Unused_Cnt AS INTEGER) AS soda_ty_point_unused_cnt,
                     CAST(TY_Point_UnusedWOCoupon_Cnt AS INTEGER) AS soda_ty_point_unusedwocoupon_cnt,
@@ -361,10 +362,11 @@ def cdp_soda_stream_campaign_sql() -> str:
                     CAST(TY_Coupon_Sent_ID AS STRING) AS soda_ty_coupon_sent_id,
                     CAST(TY_Coupon_Used_ID AS STRING) AS soda_ty_coupon_used_id,
                     CAST(TY_Coupon_Unused_ID AS STRING) AS soda_ty_coupon_unused_id,
+                    CAST(TY_Coupon_LastCreated_DT AS DATETIME) AS soda_ty_coupon_lastcreated_date,
                     CAST(TY_Coupon_Exp_Date AS DATETIME) AS soda_ty_coupon_exp_date,
                     CAST(LY_Campaign_Year_ID AS STRING) AS soda_ly_campaign_Year_id,
                     CAST(LY_Point_All_Cnt AS INTEGER) AS soda_ly_point_all_cnt,
-                    CAST(LY_Point_ToCoupon_Cnt AS INTEGER) AS soda_ly_point_tocoupon_cnt,
+                    CAST(LY_Point_UpperLimit_Cnt AS INTEGER) AS soda_ly_point_upperlimit_cnt,
                     CAST(LY_Point_Used_Cnt AS INTEGER) AS soda_ly_point_used_cnt,
                     CAST(LY_Point_Unused_Cnt AS INTEGER) AS soda_ly_point_unused_cnt,
                     CAST(LY_Point_UnusedWOCoupon_Cnt AS INTEGER) AS soda_ly_point_unusedwocoupon_cnt,
@@ -374,6 +376,7 @@ def cdp_soda_stream_campaign_sql() -> str:
                     CAST(LY_Coupon_Sent_ID AS STRING) AS soda_ly_coupon_sent_id,
                     CAST(LY_Coupon_Used_ID AS STRING) AS soda_ly_coupon_used_id,
                     CAST(LY_Coupon_Unused_ID AS STRING) AS soda_ly_coupon_unused_id,
+                    CAST(LY_Coupon_LastCreated_DT AS DATETIME) AS soda_ly_coupon_lastcreated_date,
                     CAST(LY_Coupon_Exp_Date AS DATETIME) AS soda_ly_coupon_exp_date
                 FROM source
                 WHERE Assess_Date = CURRENT_DATE("Asia/Taipei")
