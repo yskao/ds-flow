@@ -19,7 +19,6 @@ from mllib.repurchase.hlh_repurchase import HLHRepurchase
 from mllib.sql_query.soda_stream_repurchase_script import (
     cdp_soda_stream_campaign_sql,
     cdp_soda_stream_sql,
-    cdp_soda_stream_sql_v1,
 )
 from prefect import flow, get_run_logger, task
 
@@ -66,12 +65,22 @@ mapping_combo_qty = {
     "五入": 5,
 }
 
+fillna_values = {
+    "TY_Point_All_Cnt": 0, "TY_Point_UpperLimit_Cnt": 0, "TY_Point_Used_Cnt": 0,
+    "TY_Point_Unused_Cnt": 0, "TY_Point_UnusedWOCoupon_Cnt": 0,
+    "TY_Coupon_Sent_Cnt": 0, "TY_Coupon_Used_Cnt": 0, "TY_Coupon_Unused_Cnt": 0,
+    "LY_Point_All_Cnt": 0, "LY_Point_UpperLimit_Cnt": 0, "LY_Point_Used_Cnt": 0,
+    "LY_Point_Unused_Cnt": 0, "LY_Point_UnusedWOCoupon_Cnt": 0,
+    "LY_Coupon_Sent_Cnt": 0, "LY_Coupon_Used_Cnt": 0, "LY_Coupon_Unused_Cnt": 0,
+    "Member_GasCylindersReward_Point": 0, "GasCylinders_Purchase_Qty": 0,
+}
+
 @task(name="create_prediction_table_for_soda_stream")
 def create_ds_soda_stream_prediction_table(bigquery_client: BigQueryClient) -> None:
     """Create DS.DS_SodaStream_Prediction."""
     bigquery_client.query(
         """
-            CREATE OR REPLACE TABLE DS.DS_SodaStream_Prediction_v1 (
+            CREATE OR REPLACE TABLE DS.DS_SodaStream_Prediction (
                 ETL_Datetime DATETIME NOT NULL OPTIONS(description="ETL執行日期"),
                 Assess_Date DATE NOT NULL OPTIONS(description="模型執行日期"),
                 Member_Mobile STRING NOT NULL OPTIONS(description="會員手機號碼"),
@@ -294,7 +303,7 @@ def delete_assess_date_duplicate(bigquery_client: BigQueryClient, assess_date: p
             ScalarQueryParameter("Assess_Date", "STRING", str(assess_date.date())),
         ]
     delete_query = """
-        DELETE FROM DS.DS_SodaStream_Prediction_v1
+        DELETE FROM DS.DS_SodaStream_Prediction
         WHERE Assess_Date = @assess_date
     """
     bigquery_client.query(
@@ -308,11 +317,6 @@ def gen_cdp_soda_stream_data_to_bq(bigquery_client: BigQueryClient):
     return bigquery_client.query(cdp_soda_stream_sql()).result()
 
 
-@task(name="gen_cdp_required_data_v1")
-def gen_cdp_soda_stream_data_to_bq_v1(bigquery_client: BigQueryClient):
-    return bigquery_client.query(cdp_soda_stream_sql_v1()).result()
-
-
 @task(name="gen_cdp_required_campaign_data")
 def gen_cdp_soda_stream_campaign_data_to_bq(bigquery_client: BigQueryClient):
     return bigquery_client.query(cdp_soda_stream_campaign_sql()).result()
@@ -322,7 +326,7 @@ def gen_cdp_soda_stream_campaign_data_to_bq(bigquery_client: BigQueryClient):
 def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
     """Flow for ds.ds_sodastream_prediction."""
     bigquery_client = get_bigquery_client()
-    get_gcs_client()
+    gcs_client = get_gcs_client()
     get_cylinder_data_model = ExtractDataForTraining()
     member_cylinder_points_df = (
         get_cylinder_data_model.get_cylinder_points_df(bigquery_client)
@@ -399,7 +403,6 @@ def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
         .drop_duplicates("Member_Mobile")
         .reset_index(drop=True)
     )
-
     # 加入季節性的用戶到原本預測的用戶中
     bq_df_has_seasonal_probability = (
         bq_df.loc[bq_df["Member_Mobile"].isin(pred_seasonal_result["Member_Mobile"]), "Repurchase_Possibility"].dropna())
@@ -423,25 +426,26 @@ def gas_cylinder_repurchase_flow_v1(init: bool = False) -> None:
         .merge(member_cylinder_points_df, on="Member_Mobile", how="left")
         .merge(sodastream_campaign_last2y_df, on="Member_Mobile", how="left")
         .merge(cylinder_purchase_qty_df, on="Member_Mobile", how="left")
-    ).fillna({
-        "Member_GasCylindersReward_Point": 0, "GasCylinders_Purchase_Qty": 0})
+    ).fillna(fillna_values)
     # prediction data 上傳資料到 bq
     delete_assess_date_duplicate(bigquery_client, assess_date)
     upload_df_to_bq(
         bigquery_client=bigquery_client,
         upload_df=bq_df,
-        bq_table="DS.DS_SodaStream_Prediction_v1",
+        bq_table="DS.DS_SodaStream_Prediction",
         bq_project="data-warehouse-369301",
     )
 
     # 通知名單上傳到 BQ - CDP
-    gen_cdp_soda_stream_data_to_bq_v1(bigquery_client)
+    gen_cdp_soda_stream_data_to_bq(bigquery_client)
     gen_cdp_soda_stream_campaign_data_to_bq(bigquery_client)
 
-
-    # 從 bq 抓資料計算再另存 table
     # save model
-    # store_trained_model_to_gcs(
+    store_trained_model_to_gcs(
+        model=ml_model,
+        model_version=assess_date.strftime("%Y-%m-%d"),
+        gcs_client=gcs_client,
+    )
 
 if __name__ == "__main__":
     gas_cylinder_repurchase_flow_v1(False)
