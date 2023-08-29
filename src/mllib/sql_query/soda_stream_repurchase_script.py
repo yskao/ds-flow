@@ -216,71 +216,11 @@ class CylinderSQL:
 
 def cdp_soda_stream_sql() -> str:
     query = """
-        CREATE OR REPLACE TABLE CDP.DS_SodaStream_Prediction AS
-        WITH source AS (
-            SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction`
-            UNION ALL
-            SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_TestList`
-        )
-
-        , prediction AS (
-            SELECT
-                Member_Mobile AS identity_mobile,
-                CAST(Assess_Date AS DATETIME) AS soda_assess_date,
-                Member_GasCylindersReward_Point AS soda_gascylindersreward_point,
-                LastPurchase_Datetime AS soda_lastpurchase_datetime,
-                Repurchase_Flag AS soda_repurchase_flag,
-                Repurchase_Possibility AS soda_repurchase_possibility,
-                Avg_Duration_Day_Cnt AS soda_avgdurationday_cnt
-            FROM source
-            WHERE Assess_Date = CURRENT_DATE("Asia/Taipei")
-                AND Repurchase_Possibility IS NOT NULL
-        )
-
-        -- member
-        , dim_member AS (
-            SELECT
-                mobile,
-                counter
-            FROM `dim.members`
-        )
-
-        -- counter
-        , dim_counter AS (
-            SELECT
-                Counter_Code,
-                IF(ReplaceDyson_Counter_Code="", Counter_Code, ReplaceDyson_Counter_Code) AS soda_member_counter,
-            FROM `dim.counter`
-        )
-
-        , cdp_prediction AS (
-            SELECT * FROM prediction p
-            LEFT JOIN dim_member m ON p.identity_mobile = m.mobile
-            LEFT JOIN dim_counter c ON m.counter = c.Counter_Code
-
-        )
-
-        SELECT
-            identity_mobile,
-            soda_assess_date,
-            soda_gascylindersreward_point,
-            soda_lastpurchase_datetime,
-            soda_repurchase_flag,
-            soda_repurchase_possibility,
-            soda_member_counter,
-            soda_avgdurationday_cnt
-        FROM cdp_prediction
-        """
-    return query
-
-
-def cdp_soda_stream_sql_v1() -> str:
-    query = """
-        CREATE OR REPLACE TABLE DS.CDP_DS_SodaStream_Prediction_v1 AS (
+        CREATE OR REPLACE TABLE CDP.DS_SodaStream_Prediction AS (
             WITH source AS (
-                SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_v1`
+                SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction`
                 UNION ALL
-                SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_TestList_v1`
+                SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_TestList`
             )
 
             , prediction AS (
@@ -338,11 +278,11 @@ def cdp_soda_stream_sql_v1() -> str:
 def cdp_soda_stream_campaign_sql() -> str:
 
     query = """
-        CREATE OR REPLACE TABLE CDP.DS_SodaStream_Campaign_v1 AS (
+        CREATE OR REPLACE TABLE CDP.DS_SodaStream_Campaign AS (
             WITH source AS (
-                SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_v1`
+                SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction`
                 UNION ALL
-                SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_TestList_v1`
+                SELECT * FROM `data-warehouse-369301.DS.DS_SodaStream_Prediction_TestList`
             )
 
             -- prediction
@@ -381,6 +321,7 @@ def cdp_soda_stream_campaign_sql() -> str:
                 FROM source
                 WHERE Assess_Date = CURRENT_DATE("Asia/Taipei")
                     AND Repurchase_Possibility IS NOT NULL
+                    AND User_Mask_Mobile is not NULL
             )
 
             SELECT * FROM campaign
