@@ -3,8 +3,8 @@ from datetime import datetime
 
 import pandas as pd
 from dateutil.relativedelta import relativedelta
+from google.cloud.bigquery import ArrayQueryParameter, QueryJobConfig, ScalarQueryParameter
 from google.cloud.bigquery import Client as BigQueryClient
-from google.cloud.bigquery import QueryJobConfig, ScalarQueryParameter
 
 from mllib.sql_query.soda_stream_repurchase_script import CylinderSQL
 
@@ -115,7 +115,7 @@ class ExtractDataForTraining:
         month_versions_range = pd.date_range(start=start_month, end=end_month,freq="MS") - pd.DateOffset(months=1)
         month_versions_range_quot_str = [month.strftime("%Y-%m") for month in month_versions_range]
         query_parameters = [
-                ScalarQueryParameter("month_versions_range_quot_str", "STRING", month_versions_range_quot_str),
+                ArrayQueryParameter("month_versions_range_quot_str", "STRING", month_versions_range_quot_str),
             ]
         sql = """
                 select
@@ -123,16 +123,16 @@ class ExtractDataForTraining:
                 from
                     DS.f_sales_forecast_versions
                 where
-                    month_version in (@month_versions_range_quot_str)
+                    month_version in UNNEST(@month_versions_range_quot_str)
             """
         forecast_df = bigquery_client.query(
             sql,
             job_config=QueryJobConfig(query_parameters=query_parameters),
-        ).result().to_dataframe()
+        ).result().to_dataframe(dtypes={"month_version": "datetime64[ns]", "date": "datetime64[ns]"})
 
         forecast_target = forecast_df[forecast_df["product_id_combo"].isin(training_info["product_id_combo"])].copy()
-        forecast_target[["month_version", "date"]] = forecast_target[["month_version", "date"]].apply(pd.to_datetime)
-        forecast_target = forecast_target.groupby(["product_id_combo", "month_version", "date"]).agg({"sales_quantity": "sum"}).reset_index()
+        forecast_target = forecast_target.groupby(
+            ["product_id_combo", "month_version", "date"]).agg({"sales_quantity": "sum"}).reset_index()
         forecast_target["M"] = (
             (forecast_target["date"].dt.year - forecast_target["month_version"].dt.year) * 12
             + (forecast_target["date"].dt.month - forecast_target["month_version"].dt.month)
