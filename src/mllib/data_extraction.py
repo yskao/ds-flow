@@ -119,28 +119,32 @@ class ExtractDataForTraining:
             ]
         sql = """
                 select
-                    month_version, date, product_id_combo, sales_quantity
+                    month_version AS predicted_on_date,
+                    date,
+                    product_id_combo,
+                    sales_quantity
                 from
                     DS.f_sales_forecast_versions
                 where
-                    month_version in UNNEST(@month_versions_range_quot_str)
+                    FORMAT_DATETIME('%Y-%m', month_version) in UNNEST(@month_versions_range_quot_str)
             """
         forecast_df = bigquery_client.query(
             sql,
             job_config=QueryJobConfig(query_parameters=query_parameters),
-        ).result().to_dataframe(dtypes={"month_version": "datetime64[ns]", "date": "datetime64[ns]"})
+        ).result().to_dataframe(dtypes={"predicted_on_date": "datetime64[ns]", "date": "datetime64[ns]"})
 
         forecast_target = forecast_df[forecast_df["product_id_combo"].isin(training_info["product_id_combo"])].copy()
         forecast_target = forecast_target.groupby(
-            ["product_id_combo", "month_version", "date"]).agg({"sales_quantity": "sum"}).reset_index()
+            ["product_id_combo", "predicted_on_date", "date"]).agg({"sales_quantity": "sum"}).reset_index()
+
         forecast_target["M"] = (
-            (forecast_target["date"].dt.year - forecast_target["month_version"].dt.year) * 12
-            + (forecast_target["date"].dt.month - forecast_target["month_version"].dt.month)
+            forecast_target.apply(lambda row: relativedelta(row["date"], row["predicted_on_date"]), axis=1)
+            .apply(lambda x: x.months + x.years*12 + 1)
         )
         forecast_target = forecast_target.rename(columns={"sales_quantity":"sales_agent"})
         output_df = (
             forecast_target[["M", "date", "product_id_combo", "sales_agent"]]
-            .query("1 <= M <= 5").reset_index(drop=True)
+            .query("1 <= M <= 6").reset_index(drop=True)
         )
         return output_df
 

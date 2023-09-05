@@ -98,23 +98,30 @@ def generate_model_testing_df(
     logging = logging = get_run_logger()
     logging.info("generating model testing table ...")
     target_time = pd.to_datetime(target_time)
-    start_month = (target_time - pd.DateOffset(months=6)).strftime("%Y-%m-01")
+    start_month = (target_time - pd.DateOffset(months=12)).strftime("%Y-%m-01")
     training_info = trans_model.data_extraction.get_training_target()
+
     agent_forecast = trans_model.data_extraction.get_agent_forecast_data(
         start_month=start_month,
         end_month=target_time,
         training_info = training_info,
         bigquery_client=bigquery_client,
-    )
-    test_table = get_test_data_for_reference(test_df=model.test_df, _cols="sales")
+    ).query("M==1")[["date", "product_id_combo", "sales_agent"]] # 業務預估取當月預估值即可
+
+    test_table = (
+        get_test_data_for_reference(test_df=model.test_df, _cols="sales")
+        .query("predicted_on_date == predicted_on_date.max()")
+    ) # test_table 取預測版本最新的一期
+
     pred_table = model._quantile_result(
         get_test_data_for_reference(test_df=model.pred_df, _cols="sales")
         .rename(columns={"sales": "sales_model"}),
         target="sales_model",
     )
+
     test_df = (
         test_table
-        .merge(agent_forecast, on=["M", "date", "product_id_combo"], how="left")
+        .merge(agent_forecast, on=["date", "product_id_combo"], how="left")
         .merge(train_df, on=["sales", "date", "product_id_combo"], how="left")
         .merge(pred_table, on=["predicted_on_date", "product_id_combo", "date", "M"])
         .merge(training_info[["product_name", "product_id_combo"]], on="product_id_combo", how="left")
@@ -126,6 +133,7 @@ def generate_model_testing_df(
                                                          & (df["positive_ind_likely"] != 1), 1, 0),
         )
         .drop(columns=["year_weight"])
+        .sort_values(["product_id_combo", "M"])
     )
     return test_df
 
