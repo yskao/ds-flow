@@ -28,7 +28,7 @@ def dwd_survey_answers(bigquery_client: BigQueryClient) -> pd.DataFrame:
             SELECT
                 answer_id,
                 REGEXP_REPLACE(answer_content, '\\\\p{So}', '') AS answer_content
-            FROM data-warehouse-369301.DS.dwd_survey_answers
+            FROM data-warehouse-369301.dwd.survey_answers
             WHERE question_id IN (
                 '984988b1-0916-5731-aeef-85973b7f078d',
                 '70d4ee9d-293d-5a8d-99ca-4b7b29e29f95',
