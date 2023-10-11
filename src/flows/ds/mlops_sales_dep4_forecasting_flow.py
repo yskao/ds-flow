@@ -1,3 +1,4 @@
+"""sale forecast flow."""
 from typing import TypeVar
 
 import numpy as np

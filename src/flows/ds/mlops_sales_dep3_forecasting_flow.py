@@ -1,3 +1,4 @@
+"""sale forecast flow."""
 from typing import TypeVar
 
 import numpy as np
@@ -100,7 +101,6 @@ def generate_model_testing_df(
     target_time = pd.to_datetime(target_time)
     start_month = (target_time - pd.DateOffset(months=12)).strftime("%Y-%m-01")
     training_info = trans_model.data_extraction.get_training_target()
-
     agent_forecast = trans_model.data_extraction.get_agent_forecast_data(
         start_month=start_month,
         end_month=target_time,
