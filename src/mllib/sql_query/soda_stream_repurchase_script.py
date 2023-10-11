@@ -320,7 +320,6 @@ def cdp_soda_stream_campaign_sql() -> str:
                     CAST(LY_Coupon_Exp_Date AS DATETIME) AS soda_ly_coupon_exp_date
                 FROM source
                 WHERE Assess_Date = CURRENT_DATE("Asia/Taipei")
-                    AND Repurchase_Possibility IS NOT NULL
                     AND User_Mask_Mobile is not NULL
             )
 

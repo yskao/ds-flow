@@ -19,6 +19,18 @@ from utils.gcp.client import get_bigquery_client
 from utils.prefect import generate_flow_name
 
 
+@task(name="create_ads_survey_answers_word_segmentation")
+def create_ads_survey_answers_word_segmentation_table(bigquery_client: BigQueryClient) -> None:
+    """Create DS.create_ads_survey_answers_word_segmentation."""
+    bigquery_client.query(create_ads_survey_answers_word_segmentation()).result()
+
+
+@task(name="create_ads_survey_answers_named_entity_recognition")
+def create_ads_survey_answers_named_entity_recognition_table(bigquery_client: BigQueryClient) -> None:
+    """Create DS.create_ads_survey_answers_named_entity_recognition."""
+    bigquery_client.query(create_ads_survey_answers_named_entity_recognition()).result()
+
+
 @task(name="dwd_survey_answers")
 def dwd_survey_answers(bigquery_client: BigQueryClient) -> pd.DataFrame:
     """取得survey資料."""
@@ -105,22 +117,18 @@ def words_and_ners_dwd_to_ads_daily_flow(init: bool = False) -> None:
     """Flow for words_and_ners."""
     logging = get_run_logger()
     bigquery_client = get_bigquery_client()
-    answers_df = dwd_survey_answers(bigquery_client)
     assess_date = pd.Timestamp.now("Asia/Taipei").tz_localize(None).strftime("%Y-%m-%d")
 
     if init:
-        create_ads_survey_answers_word_segmentation(bigquery_client)
-        create_ads_survey_answers_named_entity_recognition(bigquery_client)
+        create_ads_survey_answers_word_segmentation_table(bigquery_client)
+        create_ads_survey_answers_named_entity_recognition_table(bigquery_client)
 
+    answers_df = dwd_survey_answers(bigquery_client)
     if len(answers_df) > 0:
         logging.info("length of answer_df >= 1, then feeding into model")
         logging.info("implement ws_pos")
         words_df = gen_ws_and_pos(answers_df)
         words_df.insert(loc=0, column="assess_date", value=assess_date)
-
-        logging.info("implement words_ners")
-        ners_df = gen_words_and_ners(answers_df)
-        ners_df.insert(loc=0, column="assess_date", value=assess_date)
 
         # 上傳資料到 BQ
         logging.info("upload_df_to_bq ws_pos")
@@ -131,6 +139,12 @@ def words_and_ners_dwd_to_ads_daily_flow(init: bool = False) -> None:
             bq_project="data-warehouse-369301",
             write_disposition="WRITE_APPEND",
         )
+
+        logging.info("implement words_ners")
+        ners_df = gen_words_and_ners(answers_df)
+        ners_df.insert(loc=0, column="assess_date", value=assess_date)
+
+        # 上傳資料到 BQ
         logging.info("upload_df_to_bq words_ners")
         upload_df_to_bq(
             bigquery_client=bigquery_client,
