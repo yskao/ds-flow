@@ -39,14 +39,14 @@ class GetProductTargetForP03P04(ExtractDataForTraining):
         """取得 P03 P04 訓練目標產品資訊."""
         sh = PSIBase(department=self.dep_code).sh_setting
         training_target_info = (
-            sh.worksheet_by_title("品號資料")
+            sh.worksheet_by_title("自訂品號資料")
             .get_as_df(numerize=False)
             .assign(product_id=lambda df: df["自訂品號"].str.split("/"))
             .rename(
                 columns={
                     "自訂品號": "product_id_combo",
                     "自訂品名": "product_name",
-                    "品牌": "brand",
+                    "自訂品牌名稱": "brand",
                     "product_id": "sku",
                 },
             )

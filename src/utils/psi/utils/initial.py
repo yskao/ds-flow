@@ -32,7 +32,7 @@ def get_product_config_df(department: int, year: int) -> DataFrame:
     google_sheet_client = get_google_sheet_client()
     setting_sheet = google_sheet_client.open_by_url(setting_sheet_url)
 
-    return setting_sheet.worksheet_by_title("品號資料").get_as_df(numerize=False)
+    return setting_sheet.worksheet_by_title("自訂品號資料").get_as_df(numerize=False)
 
 
 def create_google_sheets(title: str) -> Spreadsheet:

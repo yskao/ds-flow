@@ -84,14 +84,14 @@ class PSIBase:
         業務負責通路資料: self.agent_cust_info
         品牌資料: self.brand_info.
         """
-        wks_setting = self.sh_setting.worksheet_by_title("品號資料")
+        wks_setting = self.sh_setting.worksheet_by_title("自訂品號資料")
         self.brand_product_info = wks_setting.get_as_df(numerize=False)
 
         wks_setting = self.sh_setting.worksheet_by_title("業務負責通路資料")
         self.agent_cust_info = wks_setting.get_as_df(numerize=False)
 
         if self.department == 3:
-            wks_setting = self.sh_setting.worksheet_by_title("品牌資料")
+            wks_setting = self.sh_setting.worksheet_by_title("自訂品牌資料")
             self.brand_info = wks_setting.get_as_df(numerize=False)
 
             wks_setting = self.sh_setting.worksheet_by_title("沒客代銷售目標")
