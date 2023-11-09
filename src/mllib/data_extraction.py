@@ -118,20 +118,27 @@ class ExtractDataForTraining:
                 ArrayQueryParameter("month_versions_range_quot_str", "STRING", month_versions_range_quot_str),
             ]
         sql = """
-                select
-                    month_version AS predicted_on_date,
-                    date,
-                    product_id_combo,
-                    sales_quantity
-                from
-                    DS.f_sales_forecast_versions
-                where
-                    FORMAT_DATETIME('%Y-%m', month_version) in UNNEST(@month_versions_range_quot_str)
+                WITH RankedData AS (
+                    SELECT
+                        *
+                        , ROW_NUMBER() OVER (
+                            PARTITION BY month_version, date, sales_agent_name, channel, product_id_combo ORDER BY created DESC, sales_agent DESC
+                        ) AS rn
+                    FROM DS.f_sales_forecast_hist
+                    WHERE
+                        month_version in UNNEST(@month_versions_range_quot_str)
+                )
+                SELECT
+                    month_version AS predicted_on_date, date, product_id_combo, SUM(sales_agent) AS sales_agent
+                FROM RankedData
+                WHERE rn = 1
+                GROUP BY month_version, date, product_id_combo
+                ORDER BY month_version DESC, product_id_combo, date ASC
             """
         forecast_df = bigquery_client.query(
             sql,
             job_config=QueryJobConfig(query_parameters=query_parameters),
-        ).result().to_dataframe(dtypes={"predicted_on_date": "datetime64[ns]", "date": "datetime64[ns]"})
+        ).to_dataframe(dtypes={"predicted_on_date": "datetime64[ns]", "date": "datetime64[ns]"})
 
         forecast_target = forecast_df[forecast_df["product_id_combo"].isin(training_info["product_id_combo"])].copy()
         forecast_target = forecast_target.groupby(
