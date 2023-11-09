@@ -122,14 +122,14 @@ class ExtractDataForTraining:
                     SELECT
                         *
                         , ROW_NUMBER() OVER (
-                            PARTITION BY month_version, date, sales_agent_name, channel, product_id_combo ORDER BY created DESC, sales_agent DESC
+                            PARTITION BY month_version, date, sales_agent_name, channel, product_id_combo ORDER BY created DESC, sales_quantity DESC
                         ) AS rn
                     FROM DS.f_sales_forecast_hist
                     WHERE
                         month_version in UNNEST(@month_versions_range_quot_str)
                 )
                 SELECT
-                    month_version AS predicted_on_date, date, product_id_combo, SUM(sales_agent) AS sales_agent
+                    month_version AS predicted_on_date, date, product_id_combo, SUM(sales_quantity) AS sales_quantity
                 FROM RankedData
                 WHERE rn = 1
                 GROUP BY month_version, date, product_id_combo
