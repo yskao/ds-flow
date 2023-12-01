@@ -32,19 +32,19 @@ trans_model = TransformDataForTraining(department_code=dep_code)
 
 @task(name="create_p03_model_testing_table")
 def create_p03_model_testing_table(bigquery_client: BigQueryClient) -> None:
-    """Create DS.p03_model_testing."""
+    """Create src_ds.p03_model_testing."""
     bigquery_client.query(create_p03_model_testing()).result()
 
 
 @task(name="create_p03_model_predict_table")
 def create_p03_model_predict_table(bigquery_client: BigQueryClient) -> None:
-    """Create DS.p03_model_predict."""
+    """Create src_ds.p03_model_predict."""
     bigquery_client.query(create_p03_model_predict()).result()
 
 
 @task(name="create_p03_model_referenceable_table")
 def create_p03_model_referenceable_table(bigquery_client: BigQueryClient) -> None:
-    """Create DS.p03_model_referenceable."""
+    """Create src_ds.p03_model_referenceable."""
     bigquery_client.query(create_p03_model_referenceable()).result()
 
 
@@ -274,20 +274,20 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
     )
     store_test_to_bq(
         test_df=test_df,
-        bq_table="DS.ds_p03_model_testing",
+        bq_table="src_ds.ds_p03_model_testing",
         department_code=dep_code,
         bigquery_client=bigquery_client,
     )
     store_predictions_to_bq(
         train_df=train_df,
         predict_df=predict_df,
-        bq_table="DS.ds_p03_model_predict",
+        bq_table="src_ds.ds_p03_model_predict",
         department_code=dep_code,
         bigquery_client=bigquery_client,
     )
     store_references_to_bq(
         mae_df=reference_df,
-        bq_table="DS.ds_p03_model_referenceable",
+        bq_table="src_ds.ds_p03_model_referenceable",
         department_code=dep_code,
         bigquery_client=bigquery_client,
     )
