@@ -1,9 +1,9 @@
 
 
 def create_p04_model_testing():
-    """Create DS.ds_p04_model_testing."""
+    """Create src_ds.ds_p04_model_testing."""
     bq_query = """
-        CREATE OR REPLACE TABLE DS.ds_p04_model_testing (
+        CREATE OR REPLACE TABLE src_ds.ds_p04_model_testing (
             month_version STRING OPTIONS(description="模型版本"),
             dep_code STRING OPTIONS(description="部門代號"),
             brand STRING OPTIONS(description="品牌"),
@@ -30,9 +30,9 @@ def create_p04_model_testing():
 
 
 def create_p04_model_predict():
-    """Create DS.ds_p04_model_predict."""
+    """Create src_ds.ds_p04_model_predict."""
     bq_query = """
-        CREATE OR REPLACE TABLE DS.ds_p04_model_predict (
+        CREATE OR REPLACE TABLE src_ds.ds_p04_model_predict (
             month_version STRING OPTIONS(description="模型版本"),
             dep_code STRING OPTIONS(description="部門代號"),
             brand STRING OPTIONS(description="品牌"),
@@ -55,9 +55,9 @@ def create_p04_model_predict():
 
 
 def create_p04_model_referenceable():
-    """Create DS.ds_p04_model_referenceable."""
+    """Create src_ds.ds_p04_model_referenceable."""
     bq_query = """
-        CREATE OR REPLACE TABLE DS.ds_p04_model_referenceable (
+        CREATE OR REPLACE TABLE src_ds.ds_p04_model_referenceable (
             month_version STRING OPTIONS(description="模型版本"),
             product_id_combo STRING OPTIONS(description="產品名稱組合"),
             bound_01_flag STRING OPTIONS(description="參考性"),

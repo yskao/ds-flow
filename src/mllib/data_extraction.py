@@ -124,7 +124,7 @@ class ExtractDataForTraining:
                         , ROW_NUMBER() OVER (
                             PARTITION BY month_version, date, sales_agent_name, channel, product_id_combo ORDER BY created DESC, sales_quantity DESC
                         ) AS rn
-                    FROM DS.f_sales_forecast_hist
+                    FROM src_ds.f_sales_forecast_hist
                     WHERE
                         month_version in UNNEST(@month_versions_range_quot_str)
                 )

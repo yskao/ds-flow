@@ -48,7 +48,7 @@ def predict_data_to_bq(
             ScalarQueryParameter("model_version", "STRING", model_version),
         ]
     delete_query = """
-        DELETE FROM DS.ds_p04_model_predict
+        DELETE FROM src_ds.ds_p04_model_predict
         WHERE month_version = @model_version
     """
     bigquery_client.query(
@@ -100,7 +100,7 @@ def test_data_to_bq(
             ScalarQueryParameter("model_version", "STRING", model_version),
         ]
     delete_query = """
-        DELETE FROM DS.ds_p04_model_testing
+        DELETE FROM src_ds.ds_p04_model_testing
         WHERE month_version = @model_version
     """
     bigquery_client.query(
@@ -130,7 +130,7 @@ def reference_data_to_bq(
             ScalarQueryParameter("model_version", "STRING", model_version),
         ]
     delete_query = """
-        DELETE FROM DS.ds_p04_model_referenceable
+        DELETE FROM src_ds.ds_p04_model_referenceable
         WHERE month_version = @model_version
     """
     bigquery_client.query(
