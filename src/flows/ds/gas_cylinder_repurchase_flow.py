@@ -21,6 +21,7 @@ from mllib.sql_query.soda_stream_repurchase_script import (
     cdp_soda_stream_sql,
 )
 from prefect import flow, get_run_logger, task
+from prefect.deployments import run_deployment
 
 from utils.gcp.client import get_bigquery_client, get_gcs_client
 from utils.prefect import generate_flow_name
@@ -322,6 +323,15 @@ def gen_cdp_soda_stream_campaign_data_to_bq(bigquery_client: BigQueryClient):
     return bigquery_client.query(cdp_soda_stream_campaign_sql()).result()
 
 
+@task
+def create_flow_run_cdp_campaign_profile_flow_task() -> None:
+    """create_flow_run_convert_report_files_flow_task."""
+    run_deployment(
+        name="cdp_campaign_profile_flow/main",
+        flow_run_name="triggered-by-gas-cylinder-repurchase-flow",
+    )
+
+
 @flow(name=generate_flow_name())
 def gas_cylinder_repurchase_flow(init: bool = False) -> None:
     """Flow for ds.ds_sodastream_prediction."""
@@ -446,6 +456,8 @@ def gas_cylinder_repurchase_flow(init: bool = False) -> None:
         model_version=assess_date.strftime("%Y-%m-%d"),
         gcs_client=gcs_client,
     )
+
+    create_flow_run_cdp_campaign_profile_flow_task()
 
 if __name__ == "__main__":
     gas_cylinder_repurchase_flow(False)
