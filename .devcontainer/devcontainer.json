@@ -32,11 +32,12 @@
     }
   },
   "mounts": [
-    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,type=bind,consistency=cached",
-    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached"
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh_mounted,type=bind,consistency=cached",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/root/.gitconfig_mounted,type=bind,consistency=cached"
   ],
   "remoteEnv": {
     "PYTHONPATH": "/workspaces/ds-flow/src"
   },
-  "postCreateCommand": "zsh && pre-commit install"
+  "postCreateCommand": "sh ./.devcontainer/postCreateCommand.sh",
+  "runArgs": ["--name", "dev-${localEnv:USER}-${localEnv:USERNAME}-ds-flow"]
 }
