@@ -15,4 +15,5 @@ RUN echo "Y" | sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohm
 COPY requirements-dev.txt .
 
 RUN pip install --upgrade pip
+RUN pip install pipenv
 RUN pip install -r ./requirements-dev.txt
