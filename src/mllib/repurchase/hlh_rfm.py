@@ -23,6 +23,7 @@ class RFM:
     Raises:
     ------
         ValueError: 如果提供的數量列名不存在於交易數據中,則會 ValueError 異常。
+
     """
 
     def _get_group_by_cols(

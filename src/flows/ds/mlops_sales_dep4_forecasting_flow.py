@@ -56,7 +56,7 @@ def prepare_training_data(
     bigquery_client: BigQueryClient,
 ) -> pd.DataFrame:
     """從指定的日期區間和部門代碼獲取轉換後的訓練數據。."""
-    logging = logging = get_run_logger()
+    logging = get_run_logger()
     logging.info("data extracting ...")
     training_data = trans_model.get_transformed_training_data(
         start_date=start_date,
@@ -70,7 +70,7 @@ def prepare_training_data(
 @task(name="train model")
 def train_model(train_df: pd.DataFrame) -> Predictor:
     """使用指定的訓練數據訓練模型。."""
-    logging = logging = get_run_logger()
+    logging = get_run_logger()
     logging.info("model training ...")
     model = HLHMLForecast(dataset=train_df, target="sales", n_estimators=200)
     model.fit()
@@ -81,7 +81,7 @@ def train_model(train_df: pd.DataFrame) -> Predictor:
 @task(name="prediction by model")
 def model_predict(model: Predictor, train_df: pd.DataFrame) -> pd.DataFrame:
     """使用指定的模型和訓練數據對未來進行預測。."""
-    logging = logging = get_run_logger()
+    logging = get_run_logger()
     logging.info("model predicting ...")
     product_id_list = train_df["product_id_combo"].unique()
     predict_df = model.rolling_forecast(
@@ -100,7 +100,7 @@ def generate_model_testing_df(
     bigquery_client: BigQueryClient,
 ) -> pd.DataFrame:
     """模型測試表."""
-    logging = logging = get_run_logger()
+    logging = get_run_logger()
     logging.info("generating model testing table ...")
     target_time = pd.to_datetime(target_time)
     start_month = (target_time - pd.DateOffset(months=12)).strftime("%Y-%m-01")
@@ -152,7 +152,7 @@ def generate_reference_table(
 ) -> pd.DataFrame:
     """生成「高參考-低參考」表。."""
     # 製作「高參考-低參考」表
-    logging = logging = get_run_logger()
+    logging = get_run_logger()
     logging.info("generating reference table ...")
     target_time = pd.to_datetime(target_time)
     start_month = (pd.Timestamp.now("Asia/Taipei") - pd.DateOffset(months=6)).strftime("%Y-%m-01")
@@ -182,7 +182,7 @@ def store_test_to_bq(
     bigquery_client: BigQueryClient,
 ) -> None:
     """將測試結果存儲到資料庫中。."""
-    logging = logging = get_run_logger()
+    logging = get_run_logger()
     # 計算好的測試資料存入 psi.f_model_testing
     logging.info("store test to db ...")
     test_data_to_bq(
@@ -202,7 +202,7 @@ def store_predictions_to_bq(
     bigquery_client: BigQueryClient,
 ) -> None:
     """將預測結果存儲到數據庫中。."""
-    logging = logging = get_run_logger()
+    logging = get_run_logger()
     # 預測好的資料存入 psi.f_model_predict
     # P02的 training_info 欄位只有 product_id_combo、SPU,需要更改
     training_info = (
@@ -240,7 +240,7 @@ def store_references_to_bq(
 @flow(name=generate_flow_name())
 def mlops_sales_dep4_forecasting_flow(init: bool=False) -> None:
 
-    logging = logging = get_run_logger()
+    logging = get_run_logger()
     bigquery_client = get_bigquery_client()
     end_date = pd.Timestamp.now("Asia/Taipei").tz_localize(None).strftime("%Y-%m-01")
 
