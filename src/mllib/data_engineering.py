@@ -64,27 +64,24 @@ def shift_data(
 
 def shift_all_product_id_data(
     dataset: pd.DataFrame,
-    product_id_target: str,
+    date_col: str,
+    product_col: str,
     target: str,
     lag_shift: int=0,
     future_shift: int=0,
 ) -> pd.DataFrame:
 
-    pids = dataset[product_id_target].unique()
-
-    error_msg = "date column must be exist"
-    if "date" not in dataset.columns:
-        raise ValueError(error_msg)
+    pids = dataset[product_col].unique()
 
     tmp_dfs = []
     for pid in pids:
-        tmp_i = dataset[dataset[product_id_target] == pid].copy()
+        tmp_i = dataset[dataset[product_col] == pid].copy()
         train_tmp = shift_data(
             data=tmp_i[target],
             lag_shift=lag_shift,
             future_shift=future_shift,
         )
-        tmp_df = pd.concat((tmp_i[["date", "product_id_combo"]], train_tmp), axis=1)
+        tmp_df = pd.concat((tmp_i[[date_col, product_col]], train_tmp), axis=1)
         tmp_df = tmp_df[sorted(tmp_df.columns)][lag_shift:-future_shift+1].reset_index(drop=True)
         tmp_dfs.append(tmp_df)
     return pd.concat(tmp_dfs, axis=0).reset_index(drop=True)

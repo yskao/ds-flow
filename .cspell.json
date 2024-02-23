@@ -10,5 +10,8 @@
         "astype",
         "sodastream",
         "fillna",
+        "to_dataframe",
+        "HLHMLForecast",
+        "pids"
     ]
 }

@@ -3,11 +3,12 @@ import logging
 
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 from statsmodels.tsa.forecasting.stl import STLForecast
 from statsmodels.tsa.statespace.exponential_smoothing import ExponentialSmoothing
 from xgboost import XGBRegressor
 
-from mllib.data_engineering import shift_all_product_id_data
+from utils.forecasting.sales_forecasting.utils import shift_all_product_id_data
 
 
 class HLHMLForecast:
@@ -16,6 +17,8 @@ class HLHMLForecast:
     def __init__(
         self,
         dataset: pd.DataFrame,
+        date_col: str,
+        product_col: str,
         target: str,
         n_estimators: int=300,
         future_shift: int=6,
@@ -27,59 +30,59 @@ class HLHMLForecast:
             raise ValueError(error_msg)
 
         error_msg = f"the month must be at least more than {future_shift+lag_shift+1}"
-        if len(dataset.groupby("date")["date"]) < (future_shift+lag_shift+1):
+        if len(dataset.groupby(date_col)[date_col]) < (future_shift+lag_shift+1):
             raise ValueError(error_msg)
 
-        self.dataset=dataset
+        self.dataset=dataset.copy()
         self.target = target
         self.future_shift = future_shift
         self.lag_shift = lag_shift
+        self.date_col = date_col
+        self.product_col = product_col
 
         self.model = XGBRegressor(
             tree_method="hist",
             enable_categorical=True,
             random_state=12,
             n_estimators=n_estimators,
+            early_stopping_rounds=5,
+            multi_strategy="multi_output_tree",
         )
 
         self.train_df = shift_all_product_id_data(
             dataset=dataset,
             target=target,
-            product_id_target="product_id_combo",
+            date_col=date_col,
+            product_col=product_col,
             lag_shift=self.lag_shift,
             future_shift=self.future_shift,
-        ).set_index("date")
+        ).set_index(self.date_col)
 
-        self.cate_cols = ["product_id_combo"]
         self.predict_cols = [f"{target}_future{i}" for i in range(1, future_shift+1)]
-        self.train_cols = self.cate_cols + [f"{target}_lag{i}" for i in range(1, lag_shift+1)]
-
-        for col in self.cate_cols:
-            self.train_df[col] = self.train_df[col].astype("category")
+        self.train_cols = [self.product_col] + [f"{target}_lag{i}" for i in range(1, lag_shift+1)]
+        self.train_df[self.product_col] = self.train_df[self.product_col].astype("category")
 
         self.X = self.train_df[self.train_cols]
         self.y = self.train_df[self.predict_cols]
 
-
     def fit(self) -> None:
-        """設定 early_stopping_rounds 參數為 2,避免過度擬合."""
-        self.model.set_params = {"early_stopping_rounds": 2}
-        self.model.fit(self.X, self.y, eval_set=[(self.X, self.y)])
+        """模型訓練."""
+        x_train, x_test, y_train, y_test = train_test_split(self.X, self.y, test_size=0.1, random_state=12)
+        self.model.fit(x_train, y_train, eval_set=[(x_test, y_test)])
+
         errors = self.y - self.model.predict(self.X)
         self.errors = errors.rename(
             columns=lambda col: col.replace("future", "error"),
-            ).assign(product_id_combo=self.X["product_id_combo"])
-        self.test_df = self.y.assign(product_id_combo=self.X["product_id_combo"])
+            ).assign(product_id=self.X[self.product_col])
+        self.test_df = self.y.assign(product_id=self.X[self.product_col])
         self.pred_df = (
             pd.DataFrame(self.model.predict(self.X), index=self.y.index, columns=self.predict_cols)
-            .assign(product_id_combo=self.X["product_id_combo"])
+            .assign(product_id=self.X[self.product_col])
         )
-
 
     def predict(self, x: pd.DataFrame) -> np.array:
         """模型預測結果."""
         return self.model.predict(x)
-
 
     def _seasonal_product_forecast(
         self,
@@ -87,8 +90,8 @@ class HLHMLForecast:
         forecast_steps: int = 12,
     ) -> pd.DataFrame:
         """針對季節性商品進行時間序列預測."""
-        tmp = seasonal_product_df.reset_index(drop=True)[["date", "sales"]].copy()
-        time_series_tmp = tmp.set_index("date").squeeze()
+        tmp = seasonal_product_df.reset_index(drop=True)[[self.date_col, self.target]].copy()
+        time_series_tmp = tmp.set_index(self.date_col).squeeze()
         fill_value = time_series_tmp.describe()["25%"]
         time_series_tmp[time_series_tmp < 0] = fill_value
         time_series_tmp.index = pd.DatetimeIndex(time_series_tmp.index, freq="MS")
@@ -96,10 +99,9 @@ class HLHMLForecast:
         es_model = stlf.fit()
         es_predict = es_model.forecast(forecast_steps)
         es_predict[es_predict < 0] = fill_value
-        return es_predict.reset_index().rename(columns={"index": "date", 0: "sales"})
+        return es_predict.reset_index().rename(columns={"index": self.date_col, 0: self.target})
 
-
-    def _quantile_result(self, forecast_df: pd.DataFrame, target: str="sales") -> pd.DataFrame:
+    def _quantile_result(self, forecast_df: pd.DataFrame, target: str) -> pd.DataFrame:
         """根據預測的差計算區間, 並加入到預測結果 DataFrame 中."""
         return forecast_df.assign(
             less_likely_lb=forecast_df[target]*0.15,
@@ -107,7 +109,6 @@ class HLHMLForecast:
             likely_ub=forecast_df[target]*1.25,
             less_likely_ub=forecast_df[target]*2,
           )
-
 
     def rolling_forecast(
         self,
@@ -122,7 +123,7 @@ class HLHMLForecast:
         seasonal_product_id = [] if seasonal_product_id is None else seasonal_product_id
 
         for pid in product_id:
-            train_tmp = self.train_df[self.train_df["product_id_combo"] == pid].copy()
+            train_tmp = self.train_df[self.train_df[self.product_col] == pid].copy()
             # 針對非季節性商品進行 multi-output 預測
             if pid not in seasonal_product_id:
                 tmp_x = np.array(train_tmp[self.X.columns]).tolist()
@@ -131,11 +132,11 @@ class HLHMLForecast:
                 for _i in range(n_periods):
 
                     input_seq = tmp_x[-1].copy()
-                    input_seq[self.future_shift+1:] = input_seq[len(self.cate_cols):(self.lag_shift-self.future_shift)+1]
-                    input_seq[len(self.cate_cols):self.future_shift+1] = tmp_y[-1][::-1]
+                    input_seq[self.future_shift+1:] = input_seq[len(self.product_col):(self.lag_shift-self.future_shift)+1]
+                    input_seq[len(self.product_col):self.future_shift+1] = tmp_y[-1][::-1]
                     tmp_x.append(input_seq)
 
-                    input_seq_df = pd.DataFrame([input_seq], columns=self.X.columns).astype({"product_id_combo": "category"})
+                    input_seq_df = pd.DataFrame([input_seq], columns=self.X.columns).astype({self.product_col: "category"})
                     self.input_seq_df = input_seq_df
 
                     tmp_yi = self.model.predict(self.input_seq_df)[0]
@@ -148,10 +149,10 @@ class HLHMLForecast:
                 self.dates = dates[dates != last_date]
 
                 forecast_df = pd.DataFrame(
-                    {"date": self.dates},
+                    {self.date_col: self.dates},
                 ).assign(
-                    product_id_combo=pid,
-                    month=lambda df: df["date"].dt.month,
+                    product_id=pid,
+                    month=lambda df: df[self.date_col].dt.month,
                 )
 
                 # 利用權重修正預測資料
@@ -170,20 +171,20 @@ class HLHMLForecast:
 
             # 如果是「季節性」商品,利用傳統時間序列滾動進行預測
             else:
-                train_tmp = self.dataset[self.dataset["product_id_combo"] == pid].copy()
-                ts_train_df = train_tmp.reset_index()[["date", "sales"]]
-                ts_train_df.columns = ["date", "sales"]
+                train_tmp = self.dataset[self.dataset[self.product_col] == pid].copy()
+                ts_train_df = train_tmp.reset_index()[[self.date_col, self.target]]
+                ts_train_df.columns = [self.date_col, self.target]
                 forecast_df = self._seasonal_product_forecast(
                     seasonal_product_df=ts_train_df,
                     forecast_steps=n_periods*6, #n_periods*6=12筆
                 )
                 self.forecast_df = forecast_df.assign(
-                    product_id_combo=pid,
-                    month=forecast_df["date"].dt.month,
+                    product_id=pid,
+                    month=forecast_df[self.date_col].dt.month,
                 )
 
             # quantile result
-            self.forecast_df = self._quantile_result(self.forecast_df)
+            self.forecast_df = self._quantile_result(self.forecast_df, target=self.target)
 
             forecast_dfs.append(self.forecast_df)
             logging.debug("forecast_dataframe: %s", self.forecast_df)

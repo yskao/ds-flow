@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
 from mllib.data_transform import TransformDataForTraining
-from mllib.hlh_ml_forecast import HLHMLForecast
+from mllib.forecasting.sales_forecasting.hlh_ml_forecast import HLHMLForecast
 from mllib.ml_utils.sales_forecasting_dep3_utils import (
     predict_data_to_bq,
     reference_data_to_bq,
@@ -20,15 +20,17 @@ from mllib.sql_query.sales_forecasting_p03_script import (
     create_p03_model_referenceable,
     create_p03_model_testing,
 )
-from prefect import flow, get_run_logger, task
+from prefect import flow, task
 
 from utils.gcp.client import get_bigquery_client
+from utils.logging_udf import get_logger
 from utils.prefect import generate_flow_name
+from utils.tools.common import get_net_month_qty_p03_data
 
 Predictor = TypeVar("Predictor")
 dep_code = "P03"
 trans_model = TransformDataForTraining(department_code=dep_code)
-
+logger = get_logger(in_prefect=True)
 
 @task(name="create_p03_model_testing_table")
 def create_p03_model_testing_table(bigquery_client: BigQueryClient) -> None:
@@ -48,43 +50,46 @@ def create_p03_model_referenceable_table(bigquery_client: BigQueryClient) -> Non
     bigquery_client.query(create_p03_model_referenceable()).result()
 
 
-@task(name="prepare training data")
+@task(name="prepare_training_data")
 def prepare_training_data(
     start_date: str,
     end_date: str,
     bigquery_client: BigQueryClient,
 ) -> pd.DataFrame:
-    """從指定的日期區間和部門代碼獲取轉換後的訓練數據。."""
-    logging = get_run_logger()
-    logging.info("data extracting ...")
-    training_data = trans_model.get_transformed_training_data(
+    """從指定的日期區間取得三處每月淨銷量數據."""
+    logger.info("data extracting ...")
+    training_data = get_net_month_qty_p03_data(
         start_date=start_date,
         end_date=end_date,
         bigquery_client=bigquery_client,
     )
-    logging.info("data extracting finish")
+    logger.info("data extracting finish")
     return training_data
 
 
-@task(name="train model")
+@task(name="model_training")
 def train_model(train_df: pd.DataFrame) -> Predictor:
     """使用指定的訓練數據訓練模型。."""
-    logging = get_run_logger()
-    logging.info("model training ...")
-    model = HLHMLForecast(dataset=train_df, target="sales", n_estimators=200)
+    logger.info("model training ...")
+    model = HLHMLForecast(
+        dataset=train_df,
+        date_col="order_ym",
+        product_col="product_custom_id",
+        target="net_sale_qty",
+        n_estimators=400,
+    )
     model.fit()
-    logging.info("model training finish")
+    logger.info("model training finish")
     return model
 
 
-@task(name="prediction by model")
+@task(name="model_predicting")
 def model_predict(model: Predictor, train_df: pd.DataFrame) -> pd.DataFrame:
     """使用指定的模型和訓練數據對未來進行預測。."""
-    logging = get_run_logger()
-    logging.info("model predicting ...")
-    product_id_list = train_df["product_id_combo"].unique()
+    logger.info("model predicting ...")
+    product_id_list = train_df["product_custom_id"].unique()
     predict_df = model.rolling_forecast(n_periods=2, product_id=product_id_list)
-    logging.info("model predicting finish")
+    logger.info("model predicting finish")
     return predict_df
 
 
@@ -96,8 +101,7 @@ def generate_model_testing_df(
     bigquery_client: BigQueryClient,
 ) -> pd.DataFrame:
     """模型測試表."""
-    logging = get_run_logger()
-    logging.info("generating model testing table ...")
+    logger.info("generating model testing table ...")
     target_time = pd.to_datetime(target_time)
     start_month = (target_time - pd.DateOffset(months=12)).strftime("%Y-%m-01")
     training_info = trans_model.data_extraction.get_training_target()
@@ -147,8 +151,7 @@ def generate_reference_table(
 ) -> pd.DataFrame:
     """生成「高參考-低參考」表。."""
     # 製作「高參考-低參考」表
-    logging = get_run_logger()
-    logging.info("generating reference table ...")
+    logger.info("generating reference table ...")
     target_time = pd.to_datetime(target_time)
     start_month = (pd.Timestamp.now("Asia/Taipei") - pd.DateOffset(months=6)).strftime("%Y-%m-01")
     agent_forecast = trans_model.data_extraction.get_agent_forecast_data(
@@ -177,9 +180,8 @@ def store_test_to_bq(
     bigquery_client: BigQueryClient,
 ) -> None:
     """將測試結果存儲到資料庫中。."""
-    logging = get_run_logger()
     # 計算好的測試資料存入 psi.f_model_testing
-    logging.info("store test to db ...")
+    logger.info("store test to db ...")
     test_data_to_bq(
         test_df=test_df,
         bq_table=bq_table,
@@ -197,7 +199,6 @@ def store_predictions_to_bq(
     bigquery_client: BigQueryClient,
 ) -> None:
     """將預測結果存儲到數據庫中。."""
-    logging = get_run_logger()
     # 預測好的資料存入 psi.f_model_predict
     # P02的 training_info 欄位只有 product_id_combo、SPU,需要更改
     training_info = (
@@ -205,7 +206,7 @@ def store_predictions_to_bq(
         [["product_name", "product_id_combo"]]
     )
     product_info = train_df.merge(training_info, on="product_id_combo").drop(columns=["date"])
-    logging.info("store predictions to db ...")
+    logger.info("store predictions to db ...")
     predict_data_to_bq(
         predict_df=predict_df,
         product_info=product_info,
@@ -235,16 +236,15 @@ def store_references_to_bq(
 @flow(name=generate_flow_name())
 def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
 
-    logging = get_run_logger()
     bigquery_client = get_bigquery_client()
-    end_date = pd.Timestamp.now("Asia/Taipei").tz_localize(None).strftime("%Y-%m-01")
+    end_date = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-01")
 
     if init:
-        logging.info("create_p03_model_predict_table ...")
+        logger.info("create_p03_model_predict_table ...")
         create_p03_model_predict_table(bigquery_client)
-        logging.info("create_p03_model_testing_table ...")
+        logger.info("create_p03_model_testing_table ...")
         create_p03_model_testing_table(bigquery_client)
-        logging.info("create_p03_model_referenceable_table ...")
+        logger.info("create_p03_model_referenceable_table ...")
         create_p03_model_referenceable_table(bigquery_client)
 
     # start_date 從 2020-01-01 開始
