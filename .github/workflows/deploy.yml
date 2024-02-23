@@ -15,23 +15,25 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v3
-    - uses: pre-commit/action@v3.0.0
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - uses: pre-commit/action@v3.0.1
 
   build-image:
     needs: pre-commit
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: 'Docker build'
       run: |
         docker build -t "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}" .
 
     - name: 'Docker login'
-      uses: 'docker/login-action@v2'
+      uses: 'docker/login-action@v3'
       with:
         registry: '${{ env.GAR_LOCATION }}-docker.pkg.dev'
         username: _json_key
@@ -47,7 +49,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - id: set-matrix
         run: echo "matrix=$(find src/flows -name '*.py' | sed '/__init__.py/d' | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
 
@@ -59,10 +61,10 @@ jobs:
         flows: ${{ fromJson(needs.list-flows.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "${{ env.PYTHON_VERSION }}"
 
@@ -70,7 +72,7 @@ jobs:
         run: echo "PYTHONPATH=${{ github.workspace }}/src" >> $GITHUB_ENV
 
       - name: Cache dependencies
-        uses: actions/cache@v3.2.4
+        uses: actions/cache@v4
         id: cache
         with:
           path: ${{ env.pythonLocation }}

@@ -30,6 +30,7 @@ class LSTMNet(nn.Module):
         Returns:
         -------
         - None
+
         """
         super().__init__()
 
@@ -59,6 +60,7 @@ class LSTMNet(nn.Module):
         Returns:
         -------
         - y_pred (torch.Tensor): 模型輸出序列
+
         """
         # layer_size, 1 --> 指的是每次輸入的資料 batch_size=1 (1 表示一包資料長度為 time_window)
         h0 = torch.zeros(self.layer_size, 1, self.hidden_size)
@@ -188,6 +190,7 @@ class HLHForecast:
         Returns
         -------
             List[Tuple[Any, Any]]: 切割後的訓練數據,為一個 Tuple 組成的列表,每個 Tuple 包括一個時間窗口的訓練數據和對應的標籤。
+
         """
         self.train_data = self.data[[self.target]].values.astype(float)
         self.scaler = MinMaxScaler(feature_range=(-1, 1))
@@ -214,6 +217,7 @@ class HLHForecast:
         Returns:
         -------
             None
+
         """
         logging.debug(f"kwargs:{kwargs}") # noqa
         self.lr = kwargs.get("lr", 0.001)
@@ -263,6 +267,7 @@ class HLHForecast:
         Returns:
         -------
             pd.DataFrame: 預測值的 DataFrame,其中包含時間序列與預測值。預測值已還原為原始數據的尺度,並已按照時間序列排序。
+
         """
         model = self.model
         scaler = self.scaler
