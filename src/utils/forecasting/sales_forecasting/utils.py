@@ -1,4 +1,5 @@
 import pandas as pd
+import pandas_flavor as pf
 
 
 def shift_data(
@@ -49,3 +50,34 @@ def shift_all_product_id_data(
         tmp_df = tmp_df[sorted(tmp_df.columns)][lag_shift:-future_shift+1].reset_index(drop=True)
         tmp_dfs.append(tmp_df)
     return pd.concat(tmp_dfs, axis=0).reset_index(drop=True)
+
+
+@pf.register_dataframe_method
+def custom_data_for_reference(ready_for_custom_df: pd.DataFrame, _cols: str="error") -> pd.DataFrame:
+    """將測試資料表格化並整理成可供比較的格式."""
+    if _cols == "error":
+        # 只取前六個預測目標
+        assign_feature = "sales_errors"
+        assign_cols = ready_for_custom_df.columns.drop(["product_id"])
+    else:
+        assign_feature = "sales"
+        assign_cols = ready_for_custom_df.columns.drop(["product_id"])
+
+    melt_table = pd.melt(
+        ready_for_custom_df,
+        id_vars=["product_id"],
+        value_vars=assign_cols,
+        var_name="estimate_date",
+        value_name=assign_feature,
+        ignore_index=False,
+    ).reset_index(names="month_version")
+
+    for idx, col in enumerate(assign_cols):
+        melt_table.loc[lambda df: df["estimate_date"]==col, "estimate_date"] = ( # noqa
+            pd.to_datetime(melt_table["month_version"]) + pd.DateOffset(months=idx)
+        )
+    melt_table["estimate_month_gap"] = (
+        pd.to_datetime(melt_table["estimate_date"]).dt.to_period("M").astype(int)+1
+        -  pd.to_datetime(melt_table["month_version"]).dt.to_period("M").astype(int)
+    )
+    return melt_table

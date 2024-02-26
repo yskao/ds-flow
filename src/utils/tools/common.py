@@ -1,7 +1,7 @@
 import pandas as pd
 import pendulum
+from google.cloud.bigquery import ArrayQueryParameter, QueryJobConfig, ScalarQueryParameter
 from google.cloud.bigquery import Client as BigQueryClient
-from google.cloud.bigquery import QueryJobConfig, ScalarQueryParameter
 
 
 def get_net_month_qty_p03_data(
@@ -29,3 +29,52 @@ def get_net_month_qty_p03_data(
         job_config=QueryJobConfig(query_parameters=query_parameters),
     ).to_dataframe().astype({"order_ym": "datetime64[ns]", "net_sale_qty": float})
     return sales_df
+
+
+def get_agent_forecast_data(
+    start_month: str,
+    end_month: str,
+    bigquery_client: BigQueryClient,
+) -> pd.DataFrame:
+    """取得業務預測資料."""
+    month_versions_range = pd.date_range(start=start_month, end=end_month,freq="MS") - pd.DateOffset(months=1)
+    month_versions_range_quot_str = [month.strftime("%Y-%m") for month in month_versions_range]
+    query_parameters = [
+            ArrayQueryParameter("month_versions_range_quot_str", "STRING", month_versions_range_quot_str),
+        ]
+    sql = """
+            WITH source AS (
+                SELECT
+                    estimate_date
+                    , etl_year_month
+                    , product_custom_id
+                    , sell_in_sale_estimate_net_qty
+                    , ROW_NUMBER() OVER (
+                        PARTITION BY estimate_date, etl_year_month, sell_in_sale_estimate_net_qty, product_custom_id ORDER BY etl_time DESC, sell_in_sale_estimate_net_qty DESC
+                    ) AS rn
+                FROM `data-warehouse-369301.ods_HLH_PSI.f_sales_forecast_hist`
+                WHERE
+                    etl_year_month in UNNEST(@month_versions_range_quot_str)
+            )
+            , agg_source AS (
+                SELECT
+                    estimate_date
+                    , CAST(CONCAT(etl_year_month, "-01") AS DATE) AS etl_year_month
+                    , product_custom_id
+                    , SUM(sell_in_sale_estimate_net_qty) AS net_sale_qty_agent
+                FROM source
+                WHERE rn = 1
+                GROUP BY etl_year_month, product_custom_id, estimate_date
+                ORDER BY product_custom_id, etl_year_month ASC, estimate_date ASC
+            )
+            SELECT
+                *
+                , DATE_DIFF(estimate_date, etl_year_month, MONTH) + 1 AS estimate_month_gap
+            FROM agg_source
+            WHERE DATE_DIFF(estimate_date, etl_year_month, MONTH) + 1 BETWEEN 1 AND 3 -- 取得業務未來三個月的預測淨銷量
+        """
+    agent_forecast_df = bigquery_client.query(
+        sql,
+        job_config=QueryJobConfig(query_parameters=query_parameters),
+    ).to_dataframe(dtypes={"etl_year_month": "datetime64[ns]", "estimate_date": "datetime64[ns]"})
+    return agent_forecast_df

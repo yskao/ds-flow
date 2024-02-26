@@ -1,19 +1,12 @@
 """sale forecast flow."""
 from typing import TypeVar
 
-import numpy as np
 import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
 from mllib.data_transform import TransformDataForTraining
 from mllib.forecasting.sales_forecasting.hlh_ml_forecast import HLHMLForecast
-from mllib.ml_utils.sales_forecasting_dep3_utils import (
-    predict_data_to_bq,
-    reference_data_to_bq,
-    test_data_to_bq,
-)
 from mllib.ml_utils.utils import (
-    get_mae_diff,
-    get_test_data_for_reference,
+    transform_data_for_reference,
 )
 from mllib.sql_query.sales_forecasting_p03_script import (
     create_p03_model_predict,
@@ -25,7 +18,7 @@ from prefect import flow, task
 from utils.gcp.client import get_bigquery_client
 from utils.logging_udf import get_logger
 from utils.prefect import generate_flow_name
-from utils.tools.common import get_net_month_qty_p03_data
+from utils.tools.common import get_agent_forecast_data, get_net_month_qty_p03_data
 
 Predictor = TypeVar("Predictor")
 dep_code = "P03"
@@ -104,42 +97,40 @@ def generate_model_testing_df(
     logger.info("generating model testing table ...")
     target_time = pd.to_datetime(target_time)
     start_month = (target_time - pd.DateOffset(months=12)).strftime("%Y-%m-01")
-    training_info = trans_model.data_extraction.get_training_target()
-    agent_forecast = trans_model.data_extraction.get_agent_forecast_data(
-        start_month=start_month,
-        end_month=target_time,
-        training_info = training_info,
-        bigquery_client=bigquery_client,
-    ).query("M==1")[["date", "product_id_combo", "sales_agent"]] # 業務預估取當月預估值即可
 
-    test_table = (
-        get_test_data_for_reference(test_df=model.test_df, _cols="sales")
-        .query("predicted_on_date == predicted_on_date.max()")
-    ) # test_table 取預測版本最新的一期
+    # 業務預估取當月預估值即可 gap=1
+    agent_forecast_data = get_agent_forecast_data(
+        start_date=start_month,
+        end_date=target_time,
+        bigquery_client=bigquery_client,
+    ).query("estimate_month_gap==1")
+
+    # test_table 取預測版本最新的一期
+    test_data = model.test_df.custom_data_for_reference(_cols="sales").query("predicted_on_date == predicted_on_date.max()")
 
     pred_table = model._quantile_result(
-        get_test_data_for_reference(test_df=model.pred_df, _cols="sales")
+        transform_data_for_reference(test_df=model.pred_df, _cols="sales")
         .rename(columns={"sales": "sales_model"}),
         target="sales_model",
     )
 
-    test_df = (
-        test_table
-        .merge(agent_forecast, on=["date", "product_id_combo"], how="left")
-        .merge(train_df, on=["sales", "date", "product_id_combo"], how="left")
-        .merge(pred_table, on=["predicted_on_date", "product_id_combo", "date", "M"])
-        .merge(training_info[["product_name", "product_id_combo"]], on="product_id_combo", how="left")
-        .assign(
-            sales_agent=lambda df: df["sales_agent"].fillna(0),
-            positive_ind_likely=lambda df: np.where((df["sales"] >= df["likely_lb"]) & (df["sales"] <= df["likely_ub"]), 1, 0),
-            positive_ind_less_likely=lambda df: np.where((df["sales"] >= df["less_likely_lb"])
-                                                         & (df["sales"] <= df["less_likely_ub"])
-                                                         & (df["positive_ind_likely"] != 1), 1, 0),
-        )
-        .drop(columns=["year_weight"])
-        .sort_values(["product_id_combo", "M"])
-    )
-    return test_df
+    # test_df = (
+    #     test_table
+    #     .merge(agent_forecast, on=["date", "product_id_combo"], how="left")
+    #     .merge(train_df, on=["sales", "date", "product_id_combo"], how="left")
+    #     .merge(pred_table, on=["predicted_on_date", "product_id_combo", "date", "M"])
+    #     .merge(training_info[["product_name", "product_id_combo"]], on="product_id_combo", how="left")
+    #     .assign(
+    #         sales_agent=lambda df: df["sales_agent"].fillna(0),
+    #         positive_ind_likely=lambda df: np.where((df["sales"] >= df["likely_lb"]) & (df["sales"] <= df["likely_ub"]), 1, 0),
+    #         positive_ind_less_likely=lambda df: np.where((df["sales"] >= df["less_likely_lb"])
+    #                                                      & (df["sales"] <= df["less_likely_ub"])
+    #                                                      & (df["positive_ind_likely"] != 1), 1, 0),
+    #     )
+    #     .drop(columns=["year_weight"])
+    #     .sort_values(["product_id_combo", "M"])
+    # )
+    return test_data
 
 
 @task(name="generate reference table")
@@ -160,7 +151,7 @@ def generate_reference_table(
         training_info = trans_model.data_extraction.get_training_target(),
         bigquery_client=bigquery_client,
     )
-    test_table = get_test_data_for_reference(test_df=model.errors)
+    test_table = custom_data_for_reference(test_df=model.errors)
     combined_df = (
         test_table
         .merge(agent_forecast, on=["M", "date", "product_id_combo"], how="left")
