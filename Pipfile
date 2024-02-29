@@ -22,6 +22,7 @@ pygsheets = "*"
 tqdm = "*"
 ckip-transformers = "*"
 pandas-flavor = "*"
+mlflow = "*"
 
 [dev-packages]
 flake8 = "*"

@@ -78,3 +78,16 @@ def get_agent_forecast_data(
         job_config=QueryJobConfig(query_parameters=query_parameters),
     ).to_dataframe(dtypes={"etl_year_month": "datetime64[ns]", "estimate_date": "datetime64[ns]"})
     return agent_forecast_df
+
+
+def get_product_custom_data_p03(bigquery_client: BigQueryClient) -> pd.DataFrame:
+    """p03 自訂產品表."""
+    sql= """
+        SELECT
+            Brand_ID AS brand_id
+            , Brand_Custom_Nm AS brand_custom_name
+            , Product_Custom_ID AS product_custom_id
+            , Product_Custom_Nm AS product_custom_name
+        FROM `data-warehouse-369301.dbt_mart_bi.legacy_mart_bi_dim_psi_custom_product_t`
+    """
+    return bigquery_client.query(sql).to_dataframe()

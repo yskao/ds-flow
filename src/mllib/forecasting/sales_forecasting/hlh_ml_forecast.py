@@ -1,8 +1,10 @@
 
 import logging
 
+import mlflow
 import numpy as np
 import pandas as pd
+from mlflow.models import infer_signature
 from sklearn.model_selection import train_test_split
 from statsmodels.tsa.forecasting.stl import STLForecast
 from statsmodels.tsa.statespace.exponential_smoothing import ExponentialSmoothing
@@ -39,15 +41,15 @@ class HLHMLForecast:
         self.lag_shift = lag_shift
         self.date_col = date_col
         self.product_col = product_col
-
-        self.model = XGBRegressor(
-            tree_method="hist",
-            enable_categorical=True,
-            random_state=12,
-            n_estimators=n_estimators,
-            early_stopping_rounds=5,
-            multi_strategy="multi_output_tree",
-        )
+        self.parameters = {
+            "tree_method": "hist",
+            "enable_categorical": True,
+            "random_state": 12,
+            "n_estimators": n_estimators,
+            "early_stopping_rounds": 20,
+            "multi_strategy": "multi_output_tree",
+            "eval_metric": ["mae", "rmse"],
+        }
 
         self.train_df = shift_all_product_id_data(
             dataset=dataset,
@@ -67,18 +69,35 @@ class HLHMLForecast:
 
     def fit(self) -> None:
         """模型訓練."""
-        x_train, x_test, y_train, y_test = train_test_split(self.X, self.y, test_size=0.1, random_state=12)
-        self.model.fit(x_train, y_train, eval_set=[(x_test, y_test)])
+        mlflow.set_experiment("Sales Forecasting Training")
+        with mlflow.start_run(nested=True):
+            self.model = XGBRegressor(**self.parameters)
+            x_train, x_test, y_train, y_test = train_test_split(self.X, self.y, test_size=0.1, random_state=12)
+            self.model.fit(x_train, y_train, eval_set=[(x_test, y_test)])
 
-        errors = self.y - self.model.predict(self.X)
-        self.errors = errors.rename(
-            columns=lambda col: col.replace("future", "error"),
-            ).assign(product_id=self.X[self.product_col])
-        self.test_df = self.y.assign(product_id=self.X[self.product_col])
-        self.pred_df = (
-            pd.DataFrame(self.model.predict(self.X), index=self.y.index, columns=self.predict_cols)
-            .assign(product_id=self.X[self.product_col])
-        )
+            # model parameters and model info
+            model_params = self.model.get_xgb_params()
+            mlflow.log_params(model_params)
+            signature = infer_signature(x_train, self.model.predict(x_train))
+            # save model
+            mlflow.sklearn.log_model(
+                self.model, "sales_forecasting_regressor", signature=signature,
+            )
+            # model validation info
+            self.eval_result = self.model.evals_result()
+            for metric_name, metric_values in self.eval_result["validation_0"].items():
+                for step, value in enumerate(metric_values):
+                    mlflow.log_metric(metric_name, value, step=step)
+
+            errors = self.y - self.model.predict(self.X)
+            self.errors = errors.rename(
+                columns=lambda col: col.replace("future", "error"),
+                ).assign(product_id=self.X[self.product_col])
+            self.test_df = self.y.assign(product_id=self.X[self.product_col])
+            self.pred_df = (
+                pd.DataFrame(self.model.predict(self.X), index=self.y.index, columns=self.predict_cols)
+                .assign(product_id=self.X[self.product_col])
+            )
 
     def predict(self, x: pd.DataFrame) -> np.array:
         """模型預測結果."""
