@@ -1,9 +1,12 @@
 """sale forecast flow."""
+import shutil
+from pathlib import Path
 from typing import TypeVar
 
 import mlflow
 import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
+from google.cloud.storage import Client as GCSClient
 from mllib.forecasting.sales_forecasting.hlh_ml_forecast import HLHMLForecast
 from mllib.sql_query.sales_forecasting_p03_script import (
     create_p03_model_predict,
@@ -18,17 +21,25 @@ from utils.forecasting.sales_forecasting.utils import (
     predict_and_test_data_to_bq,
     reference_data_to_bq,
 )
-from utils.gcp.client import get_bigquery_client
+from utils.gcp.client import get_bigquery_client, get_gcs_client
 from utils.logging_udf import get_logger
 from utils.prefect import generate_flow_name
-from utils.tools.common import get_net_month_qty_p03_data
+from utils.tools.common import (
+    get_net_month_qty_p03_data,
+    upload_directory_to_gcs,
+)
 
 DEPT_CODE = "P03"
 Predictor = TypeVar("Predictor")
 logger = get_logger(in_prefect=True)
-mlflow.set_tracking_uri(uri="file:///mlflow")
+CURRENT_PATH = Path(__file__).parent.parent.parent
+MLRUN_PATH = f"{CURRENT_PATH}/mlruns"
+BUCKET_NAME = "ml-project-hlh"
 seasonal_product_list = load_seasonal_product_ids(
-    "/workspaces/ds-flow/src/utils/forecasting/sales_forecasting/seasonal_product.yml")
+    f"{CURRENT_PATH}/utils/forecasting/sales_forecasting/seasonal_product.yml")
+
+mlflow.set_tracking_uri(uri=MLRUN_PATH)
+
 
 @task(name="create_p03_model_testing_table")
 def create_p03_model_testing_table(bigquery_client: BigQueryClient) -> None:
@@ -131,6 +142,25 @@ def store_test_to_bq(
     logger.info("store test to db finish")
 
 
+@task(name="store_metadata_and_artifacts_to_gcs")
+def store_metadata_and_artifacts_to_gcs(
+    bucket_name: str,
+    source_dir: str,
+    destination_dir: str,
+    gcs_client: GCSClient,
+) -> None:
+    """Upload file to gcs."""
+    upload_directory_to_gcs(
+        bucket_name=bucket_name,
+        source_dir=source_dir,
+        destination_dir=destination_dir,
+        gcs_client=gcs_client,
+    )
+    remove_path = Path(source_dir)
+    if remove_path.exists() and remove_path.is_dir():
+        shutil.rmtree(remove_path)
+
+
 @task(name="store_predictions_to_bq")
 def store_predictions_to_bq(
     predict_df: pd.DataFrame,
@@ -171,9 +201,12 @@ def store_references_to_bq(
 
 @flow(name=generate_flow_name())
 def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
-
+    """Main flow."""
     bigquery_client = get_bigquery_client()
+    gcs_client = get_gcs_client()
     end_date = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-01")
+    metadata_version_date = end_date.replace("-", "")
+    gcs_file_path = "mlruns/" + f"{metadata_version_date}/"
 
     if init:
         logger.info("create_p03_model_predict_table ...")
@@ -201,6 +234,12 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
         target_time=end_date,
         bigquery_client=bigquery_client,
     )
+    store_metadata_and_artifacts_to_gcs(
+        bucket_name=BUCKET_NAME,
+        source_dir=MLRUN_PATH,
+        destination_dir=gcs_file_path,
+        gcs_client=gcs_client,
+    )
     store_test_to_bq(
         test_df=test_df,
         bq_table="src_ds.ds_p03_model_testing",
@@ -222,4 +261,4 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
 
 
 if __name__ == "__main__":
-    mlops_sales_dep3_forecasting_flow(True)
+    mlops_sales_dep3_forecasting_flow(False)

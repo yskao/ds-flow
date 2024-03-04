@@ -138,14 +138,14 @@ def gen_model_testing_df(
     )
     # 對每個品號的模型預估做 aggregate 然後和業務預估進行比較, 如果模型的誤差高於業務預估誤差的 1.1 倍, 那麼模型預估為"低參考"
     # 如果模型預估的誤差低於業務預估誤差的 0.9 倍, 則為"高參考", 否則為"可參考"
-    final_df["mae_agent"] = np.abs(final_df["net_sale_qty"] - final_df["net_sale_qty_agent"])
-    final_df["mae_model"] = np.abs(final_df["mae_model"])
+    final_df["mae_agent"] = np.abs(final_df["net_sale_qty"] - final_df["net_sale_qty_agent"]).fillna(0)
+    final_df["mae_model"] = np.abs(final_df["mae_model"]).fillna(0)
     reference_df = final_df.groupby("product_custom_id", as_index=False, observed=False)[["mae_model","mae_agent"]].mean()
     reference_df["reference"] = np.where(
         reference_df["mae_model"] > reference_df["mae_agent"]*1.1, "低參考",
         np.where(reference_df["mae_model"] < reference_df["mae_agent"]*0.9, "高參考", "可參考"),
     )
-    reference_df.merge(final_df[["product_custom_id", "estimate_version", "brand_id"]], on=["product_custom_id"])
+    reference_df = reference_df.merge(final_df[["product_custom_id", "estimate_version", "brand_id"]], on=["product_custom_id"], how="left")
     return final_df, pred_data, reference_df.drop(columns=["mae_model", "mae_agent"])
 
 
@@ -177,7 +177,7 @@ def predict_and_test_data_to_bq(
         ]
     delete_query = """
         DELETE FROM `data-warehouse-369301.src_ds.ds_p03_model_testing`
-        WHERE estimate_version = @estimate_version
+        WHERE DATE(estimate_version) = @estimate_version
     """
     bigquery_client.query(
         delete_query,
@@ -209,12 +209,13 @@ def reference_data_to_bq(
     """將 reference 資料比較結果存到資料庫."""
     estimate_version = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-01")
     reference_df.insert(1, "dept_code", f"{department_code}00")
+    reference_df["estimate_version"] = reference_df["estimate_version"].astype(str)
     query_parameters = [
             ScalarQueryParameter("estimate_version", "STRING", estimate_version),
         ]
     delete_query = """
         DELETE FROM src_ds.ds_p03_model_referenceable
-        WHERE estimate_version = @estimate_version
+        WHERE DATE(estimate_version) = @estimate_version
     """
     bigquery_client.query(
         delete_query,

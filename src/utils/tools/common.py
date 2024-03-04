@@ -1,8 +1,24 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import numpy as np
 import pandas as pd
 import pendulum
-from google.cloud.bigquery import ArrayQueryParameter, QueryJobConfig, ScalarQueryParameter
+from google.cloud.bigquery import (
+    ArrayQueryParameter,
+    LoadJobConfig,
+    QueryJobConfig,
+    ScalarQueryParameter,
+)
 from google.cloud.bigquery import Client as BigQueryClient
 
+from utils.google_sheets import get_google_sheet_client
+
+if TYPE_CHECKING:
+    from google.cloud.bigquery import Client as BigQueryClient
+    from google.cloud.storage import Client as GCSClient
 
 def get_net_month_qty_p03_data(
     start_date: str,
@@ -91,3 +107,94 @@ def get_product_custom_data_p03(bigquery_client: BigQueryClient) -> pd.DataFrame
         FROM `data-warehouse-369301.dbt_mart_bi.legacy_mart_bi_dim_psi_custom_product_t`
     """
     return bigquery_client.query(sql).to_dataframe()
+
+
+def get_p02_training_target() -> pd.DataFrame:
+    """
+    從 Google Sheets 中獲取二處電池的訓練目標值,並返回結果。.
+
+    返回:
+        pandas DataFrame
+            包含品號和SPU的DataFrame。
+    """
+    client = get_google_sheet_client()
+    url_spu = (
+        "https://docs.google.com/spreadsheets/d/1nk7m2UNt1nCUoT3Zi2swFWXxC7CrrHe50azw36f57qY"
+    )
+    sh = client.open_by_url(url_spu)
+    wks_spu = sh.worksheet_by_title("二處電池SPU")
+    spu_df = wks_spu.get_as_df()
+    return (
+        spu_df[["品號", "SPU"]]
+        .replace("", np.nan, regex=True)
+        .dropna()
+        .rename(columns={"品號": "product_id_combo"})
+    )
+
+
+def get_time_tag(transaction_df: pd.DataFrame, datetime_col: str, time_feature: str) -> pd.DataFrame:
+    transaction_df[datetime_col] = pd.to_datetime(transaction_df[datetime_col])
+    if time_feature == "seasonal":
+        transaction_df["seasonal"] = transaction_df[datetime_col].dt.quarter.astype("category")
+    elif time_feature == "month":
+        transaction_df["month"] = transaction_df[datetime_col].dt.month.astype("category")
+    else:
+        pass
+    return transaction_df
+
+
+def model_upload_to_gcs(
+    local_model_path: str,
+    gcs_model_path: str,
+    bucket_name: str,
+    gcs_client: GCSClient,
+) -> None:
+    bucket = gcs_client.get_bucket(bucket_name)
+    blob = bucket.blob(gcs_model_path)
+    return blob.upload_from_filename(local_model_path)
+
+
+def model_download_from_gcs(
+    local_model_path: str,
+    gcs_model_path: str,
+    bucket_name: str,
+    gcs_client: GCSClient,
+) -> None:
+    bucket = gcs_client.get_bucket(bucket_name)
+    blob = bucket.blob(gcs_model_path)
+    return blob.download_to_filename(local_model_path)
+
+
+def upload_df_to_bq(
+    bigquery_client: BigQueryClient,
+    upload_df: pd.DataFrame,
+    bq_table: str,
+    bq_project: str,
+    write_disposition: str = "WRITE_APPEND",
+) -> str:
+    """上傳資料到 BQ."""
+    job = bigquery_client.load_table_from_dataframe(
+        dataframe=upload_df,
+        destination=bq_table,
+        project=bq_project,
+        job_config=LoadJobConfig(write_disposition=write_disposition),
+    ).result()
+    return job.state
+
+
+def upload_directory_to_gcs(
+    source_dir: str,
+    destination_dir: str,
+    bucket_name: str,
+    gcs_client: GCSClient,
+) -> None:
+    bucket = gcs_client.bucket(bucket_name)
+    directory_as_path_obj = Path(source_dir)
+    paths = directory_as_path_obj.rglob("*")
+    file_paths = [path for path in paths if path.is_file()]
+    relative_paths = [path.relative_to(source_dir) for path in file_paths]
+    # Start the upload.
+    for file_path, relative_path in zip(file_paths, relative_paths, strict=False):
+        gcs_file_path = destination_dir + str(relative_path)
+        blob = bucket.blob(gcs_file_path)
+        blob.upload_from_filename(str(file_path))

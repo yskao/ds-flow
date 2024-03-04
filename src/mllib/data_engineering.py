@@ -2,27 +2,8 @@
 
 import numpy as np
 import pandas as pd
-from dateutil.relativedelta import relativedelta
 
 from mllib.repurchase.hlh_rfm import RFM
-
-
-def add_product_id_combo_column(
-    sales_df: pd.DataFrame,
-    product_id_array: np.array,
-) -> pd.DataFrame:
-    """新增 product_id_combo 欄位."""
-    start_dt = sales_df["month_begin_date"].min()
-    end_dt = sales_df["month_begin_date"].max()
-    date_range = pd.date_range(start=start_dt, end=end_dt, freq="MS")
-    product_ids = pd.Series(product_id_array).unique()
-    output_list = [
-        pd.DataFrame(
-            {"date": date_range, "product_id_combo": [product_id] * len(date_range)},
-        ) for product_id in product_ids
-    ]
-    output_df = pd.concat(output_list, axis=0)
-    return output_df
 
 
 def set_training_weight(
@@ -60,58 +41,6 @@ def shift_data(
     )
 
     return pd.concat((tmp_lag, tmp_future), axis=1)
-
-
-def shift_all_product_id_data(
-    dataset: pd.DataFrame,
-    date_col: str,
-    product_col: str,
-    target: str,
-    lag_shift: int=0,
-    future_shift: int=0,
-) -> pd.DataFrame:
-
-    pids = dataset[product_col].unique()
-
-    tmp_dfs = []
-    for pid in pids:
-        tmp_i = dataset[dataset[product_col] == pid].copy()
-        train_tmp = shift_data(
-            data=tmp_i[target],
-            lag_shift=lag_shift,
-            future_shift=future_shift,
-        )
-        tmp_df = pd.concat((tmp_i[[date_col, product_col]], train_tmp), axis=1)
-        tmp_df = tmp_df[sorted(tmp_df.columns)][lag_shift:-future_shift+1].reset_index(drop=True)
-        tmp_dfs.append(tmp_df)
-    return pd.concat(tmp_dfs, axis=0).reset_index(drop=True)
-
-
-def prepare_predict_table_to_sql(
-    predict_df: pd.DataFrame,
-    product_data_info: pd.DataFrame,
-    predicted_on_date: str,
-    department_code: str,
-) -> pd.DataFrame:
-
-    round_columns = ["sales_model", "less_likely_lb", "likely_lb", "likely_ub", "less_likely_ub"]
-
-    predict_df = predict_df.assign(
-        month_version=predicted_on_date,
-        dep_code=f"{department_code}00",
-        predicted_on_date=pd.to_datetime(predicted_on_date, format="%Y-%m-%d"),
-        date=lambda df: pd.to_datetime(df["date"], format="%Y-%m-%d"),
-        ).rename(columns={"sales": "sales_model"})
-
-    # 計算模型預測日期和未來預測日期的月份差幾個月: 例如模型 8/1 日預測,預測未來 8~12 月,則 M=1,2,3,4,5
-    predict_df["M"] = (
-        predict_df.apply(lambda row: relativedelta(row["date"], row["predicted_on_date"]), axis=1)
-        .apply(lambda x: x.months + x.years*12 + 1)
-    )
-
-    predict_df[round_columns] = predict_df[round_columns].round()
-    product_unique_info = product_data_info.groupby("product_id_combo", as_index=False).first()
-    return predict_df.merge(product_unique_info, on="product_id_combo")
 
 
 def gen_dummies(feature_series: pd.Series, mapping_dict: dict) -> pd.DataFrame:

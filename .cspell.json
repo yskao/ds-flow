@@ -15,6 +15,12 @@
         "pids",
         "mlflow",
         "dataframe",
-        "quantile"
+        "quantile",
+        "statsmodels",
+        "referenceable",
+        "mlops",
+        "dropna",
+        "mlruns",
+        "MLRUN"
     ]
 }

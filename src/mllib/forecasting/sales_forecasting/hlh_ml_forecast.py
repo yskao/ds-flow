@@ -12,6 +12,8 @@ from xgboost import XGBRegressor
 
 from utils.forecasting.sales_forecasting.utils import shift_all_product_id_data
 
+EXPERIMENT_NAME = "Sales-Forecasting-P03"
+LOG_MODEL_NAME = "sales_forecasting_regressor"
 
 class HLHMLForecast:
     """用於銷售預測功能。使用者需要提供訓練數據,並可以根據需要指定超參數進行訓練和預測."""
@@ -69,7 +71,7 @@ class HLHMLForecast:
 
     def fit(self) -> None:
         """模型訓練."""
-        mlflow.set_experiment("Sales Forecasting Training")
+        mlflow.set_experiment(EXPERIMENT_NAME)
         with mlflow.start_run(nested=True):
             self.model = XGBRegressor(**self.parameters)
             x_train, x_test, y_train, y_test = train_test_split(self.X, self.y, test_size=0.1, random_state=12)
@@ -81,7 +83,7 @@ class HLHMLForecast:
             signature = infer_signature(x_train, self.model.predict(x_train))
             # save model
             mlflow.sklearn.log_model(
-                self.model, "sales_forecasting_regressor", signature=signature,
+                self.model, LOG_MODEL_NAME, signature=signature,
             )
             # model validation info
             self.eval_result = self.model.evals_result()
@@ -180,7 +182,7 @@ class HLHMLForecast:
                     tmp_y[-1][i] = tmp_y[-1][i-1] * 0.2 + tmp_y[-1][i] * 0.8
 
                 # 負數處理成正數
-                tmp_y = np.abs(tmp_y)
+                tmp_y = np.maximum(tmp_y, 0)
 
                 self.forecast_df = pd.concat(
                     (forecast_df, pd.concat(
