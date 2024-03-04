@@ -8,13 +8,13 @@ import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
 from google.cloud.storage import Client as GCSClient
 from mllib.forecasting.sales_forecasting.hlh_ml_forecast import HLHMLForecast
-from mllib.sql_query.sales_forecasting_p03_script import (
+from prefect import flow, task
+
+from utils.forecasting.sales_forecasting.sql import (
     create_p03_model_predict,
     create_p03_model_referenceable,
     create_p03_model_testing,
 )
-from prefect import flow, task
-
 from utils.forecasting.sales_forecasting.utils import (
     gen_model_testing_df,
     load_seasonal_product_ids,
