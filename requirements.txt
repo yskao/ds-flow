@@ -75,7 +75,7 @@ msal==1.27.0
 networkx==3.2.1 ; python_version >= '3.9'
 numpy==1.26.4
 oauthlib==3.2.2 ; python_version >= '3.6'
-orjson==3.9.14 ; python_version >= '3.8'
+orjson==3.9.15 ; python_version >= '3.8'
 packaging==23.2 ; python_version >= '3.7'
 pandas==2.2.0
 pathspec==0.12.1 ; python_version >= '3.8'
