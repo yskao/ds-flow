@@ -20,6 +20,7 @@ from utils.forecasting.sales_forecasting.utils import (
     load_seasonal_product_ids,
     predict_and_test_data_to_bq,
     reference_data_to_bq,
+    update_artifact_location,
 )
 from utils.gcp.client import get_bigquery_client, get_gcs_client
 from utils.logging_udf import get_logger
@@ -33,12 +34,10 @@ DEPT_CODE = "P03"
 Predictor = TypeVar("Predictor")
 logger = get_logger(in_prefect=True)
 CURRENT_PATH = Path(__file__).parent.parent.parent
-MLRUN_PATH = f"{CURRENT_PATH}/mlruns"
 BUCKET_NAME = "ml-project-hlh"
+EXPERIMENT_NAME = "Sales-Forecasting-P03"
 seasonal_product_list = load_seasonal_product_ids(
     f"{CURRENT_PATH}/utils/forecasting/sales_forecasting/seasonal_product.yml")
-
-mlflow.set_tracking_uri(uri=MLRUN_PATH)
 
 
 @task(name="create_p03_model_testing_table")
@@ -132,14 +131,14 @@ def store_test_to_bq(
 ) -> None:
     """將測試結果存儲到資料庫中。."""
     # 計算好的測試資料存入 psi.f_model_testing
-    logger.info("store test to db ...")
+    logger.info("store test to bq ...")
     predict_and_test_data_to_bq(
         df_for_upload=test_df,
         bq_table=bq_table,
         department_code=department_code,
         bigquery_client=bigquery_client,
     )
-    logger.info("store test to db finish")
+    logger.info("store test to bq finish")
 
 
 @task(name="store_metadata_and_artifacts_to_gcs")
@@ -150,6 +149,11 @@ def store_metadata_and_artifacts_to_gcs(
     gcs_client: GCSClient,
 ) -> None:
     """Upload file to gcs."""
+    logger.info("store metadata and model to gcs ...")
+    update_artifact_location(
+        root_dir=source_dir,
+        update_artifact_location=destination_dir,
+    )
     upload_directory_to_gcs(
         bucket_name=bucket_name,
         source_dir=source_dir,
@@ -159,6 +163,7 @@ def store_metadata_and_artifacts_to_gcs(
     remove_path = Path(source_dir)
     if remove_path.exists() and remove_path.is_dir():
         shutil.rmtree(remove_path)
+    logger.info("store metadata and model to gcs finish")
 
 
 @task(name="store_predictions_to_bq")
@@ -170,14 +175,14 @@ def store_predictions_to_bq(
 ) -> None:
     """將預測結果存儲到數據庫中。."""
     # 預測好的資料存入 psi.f_model_predict
-    logger.info("store predictions to db ...")
+    logger.info("store predictions to bq ...")
     predict_and_test_data_to_bq(
         df_for_upload=predict_df,
         bq_table=bq_table,
         department_code=department_code,
         bigquery_client=bigquery_client,
     )
-    logger.info("store predictions to db finish")
+    logger.info("store predictions to bq finish")
 
 
 @task(name="store_references_to_bq")
@@ -189,14 +194,14 @@ def store_references_to_bq(
 ) -> None:
     """將「高參考-低參考」表存儲到數據庫中。."""
     # 計算好的高參考低參考資料存入 psi.f_model_referenceable
-    logger.info("store references to db ...")
+    logger.info("store references to bq ...")
     reference_data_to_bq(
         reference_df=reference_df,
         bq_table=bq_table,
         department_code=department_code,
         bigquery_client=bigquery_client,
     )
-    logger.info("store references to db finish")
+    logger.info("store references to bq finish")
 
 
 @flow(name=generate_flow_name())
@@ -206,7 +211,11 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
     gcs_client = get_gcs_client()
     end_date = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-01")
     metadata_version_date = end_date.replace("-", "")
-    gcs_file_path = "mlruns/" + f"{metadata_version_date}/"
+    metadata_path = "mlruns/" + f"{metadata_version_date}/" + "mlruns/"
+
+    # setting mlflow tracking path which must be same as download path from gcs
+    mlflow.set_experiment(experiment_name=EXPERIMENT_NAME)
+    mlflow.set_tracking_uri(uri=metadata_path)
 
     if init:
         logger.info("create_p03_model_predict_table ...")
@@ -236,8 +245,8 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
     )
     store_metadata_and_artifacts_to_gcs(
         bucket_name=BUCKET_NAME,
-        source_dir=MLRUN_PATH,
-        destination_dir=gcs_file_path,
+        source_dir=metadata_path,
+        destination_dir=metadata_path,
         gcs_client=gcs_client,
     )
     store_test_to_bq(

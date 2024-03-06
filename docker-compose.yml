@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  mlflow:
+    build:
+      context: . # 指定 Dockerfile 所在的目錄
+      dockerfile: mlflow.Dockerfile # 指定 Dockerfile 的名稱
+    container_name: mlflow_container # 為容器指定一個名稱
+    ports:
+      - "5050:5000" # 將容器的 5000 端口映射到宿主機的 5050 端口
+    volumes:
+      - ./mlruns:/mlruns # 將宿主機的目錄掛載到容器的 /mlruns
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/cloud-run-secret.json # 設置環境變量

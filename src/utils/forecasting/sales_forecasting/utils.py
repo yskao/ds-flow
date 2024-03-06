@@ -228,3 +228,24 @@ def reference_data_to_bq(
         job_config=LoadJobConfig(write_disposition="WRITE_APPEND"),
     ).result()
     return job.state
+
+
+def update_artifact_location(
+    root_dir: str,
+    update_artifact_location: str,
+) -> None:
+    root_path = Path(root_dir)
+    for file_path in root_path.rglob("meta.yaml"):
+        with file_path.open() as f:
+            data = yaml.safe_load(f)
+
+        # 檢查是否需要更新 artifact_location
+        if "artifact_location" in data and "experiment_id" in data:
+            data["artifact_location"] = f"{update_artifact_location}/{data['experiment_id']}"
+
+        if "artifact_uri" in data and "experiment_id" in data and "run_id" in data:
+            data["artifact_uri"] = f"{update_artifact_location}/{data['experiment_id']}/{data['run_id']}/artifacts"
+
+        # 將更新後的數據寫回 meta.yaml
+        with file_path.open("w") as f:
+            yaml.safe_dump(data, f)
