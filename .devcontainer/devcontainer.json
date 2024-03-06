@@ -39,5 +39,5 @@
     "PYTHONPATH": "/workspaces/ds-flow/src"
   },
   "postCreateCommand": "sh ./.devcontainer/postCreateCommand.sh",
-  "runArgs": ["--name", "dev-${localEnv:USER}-${localEnv:USERNAME}-ds-flow"]
+  "runArgs": ["--name", "dev-${localEnv:USER}-${localEnv:USERNAME}-ds-flow", "--network=host"]
 }

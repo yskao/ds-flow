@@ -7,6 +7,9 @@ src/jupyter/*
 *$py.class
 mlruns/*
 
+# secrets
+cloud-run-secret.json
+
 # C extensions
 *.so
 

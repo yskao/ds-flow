@@ -10,5 +10,17 @@
         "astype",
         "sodastream",
         "fillna",
+        "to_dataframe",
+        "HLHMLForecast",
+        "pids",
+        "mlflow",
+        "dataframe",
+        "quantile",
+        "statsmodels",
+        "referenceable",
+        "mlops",
+        "dropna",
+        "mlruns",
+        "MLRUN"
     ]
 }

@@ -1,175 +1,128 @@
 """sale forecast flow."""
+import shutil
+from pathlib import Path
 from typing import TypeVar
 
-import numpy as np
+import mlflow
 import pandas as pd
 from google.cloud.bigquery import Client as BigQueryClient
-from mllib.data_transform import TransformDataForTraining
-from mllib.hlh_ml_forecast import HLHMLForecast
-from mllib.ml_utils.sales_forecasting_dep3_utils import (
-    predict_data_to_bq,
-    reference_data_to_bq,
-    test_data_to_bq,
-)
-from mllib.ml_utils.utils import (
-    get_mae_diff,
-    get_test_data_for_reference,
-)
-from mllib.sql_query.sales_forecasting_p03_script import (
+from google.cloud.storage import Client as GCSClient
+from mllib.forecasting.sales_forecasting.hlh_ml_forecast import HLHMLForecast
+from prefect import flow, task
+
+from utils.forecasting.sales_forecasting.sql import (
     create_p03_model_predict,
     create_p03_model_referenceable,
     create_p03_model_testing,
 )
-from prefect import flow, get_run_logger, task
-
-from utils.gcp.client import get_bigquery_client
+from utils.forecasting.sales_forecasting.utils import (
+    gen_model_testing_df,
+    load_seasonal_product_ids,
+    predict_and_test_data_to_bq,
+    reference_data_to_bq,
+    update_artifact_location,
+)
+from utils.gcp.client import get_bigquery_client, get_gcs_client
+from utils.logging_udf import get_logger
 from utils.prefect import generate_flow_name
+from utils.tools.common import (
+    get_net_month_qty_p03_data,
+    upload_directory_to_gcs,
+)
 
+DEPT_CODE = "P03"
 Predictor = TypeVar("Predictor")
-dep_code = "P03"
-trans_model = TransformDataForTraining(department_code=dep_code)
+logger = get_logger(in_prefect=True)
+CURRENT_PATH = Path(__file__).parent.parent.parent
+BUCKET_NAME = "ml-project-hlh"
+EXPERIMENT_NAME = "Sales-Forecasting-P03"
+seasonal_product_list = load_seasonal_product_ids(
+    f"{CURRENT_PATH}/utils/forecasting/sales_forecasting/seasonal_product.yml")
 
 
-@task(name="create_p03_model_testing_table")
+@task
 def create_p03_model_testing_table(bigquery_client: BigQueryClient) -> None:
     """Create src_ds.p03_model_testing."""
     bigquery_client.query(create_p03_model_testing()).result()
 
 
-@task(name="create_p03_model_predict_table")
+@task
 def create_p03_model_predict_table(bigquery_client: BigQueryClient) -> None:
     """Create src_ds.p03_model_predict."""
     bigquery_client.query(create_p03_model_predict()).result()
 
 
-@task(name="create_p03_model_referenceable_table")
+@task
 def create_p03_model_referenceable_table(bigquery_client: BigQueryClient) -> None:
     """Create src_ds.p03_model_referenceable."""
     bigquery_client.query(create_p03_model_referenceable()).result()
 
 
-@task(name="prepare training data")
+@task
 def prepare_training_data(
     start_date: str,
     end_date: str,
     bigquery_client: BigQueryClient,
 ) -> pd.DataFrame:
-    """從指定的日期區間和部門代碼獲取轉換後的訓練數據。."""
-    logging = get_run_logger()
-    logging.info("data extracting ...")
-    training_data = trans_model.get_transformed_training_data(
+    """從指定的日期區間取得三處每月淨銷量數據."""
+    logger.info("data extracting ...")
+    training_data = get_net_month_qty_p03_data(
         start_date=start_date,
         end_date=end_date,
         bigquery_client=bigquery_client,
     )
-    logging.info("data extracting finish")
+    logger.info("data extracting finish")
     return training_data
 
 
-@task(name="train model")
+@task
 def train_model(train_df: pd.DataFrame) -> Predictor:
     """使用指定的訓練數據訓練模型。."""
-    logging = get_run_logger()
-    logging.info("model training ...")
-    model = HLHMLForecast(dataset=train_df, target="sales", n_estimators=200)
+    logger.info("model training ...")
+    model = HLHMLForecast(
+        dataset=train_df,
+        date_col="order_ym",
+        product_col="product_custom_id",
+        target="net_sale_qty",
+        n_estimators=400,
+    )
     model.fit()
-    logging.info("model training finish")
+    logger.info("model training finish")
     return model
 
 
-@task(name="prediction by model")
+@task
 def model_predict(model: Predictor, train_df: pd.DataFrame) -> pd.DataFrame:
     """使用指定的模型和訓練數據對未來進行預測。."""
-    logging = get_run_logger()
-    logging.info("model predicting ...")
-    product_id_list = train_df["product_id_combo"].unique()
-    predict_df = model.rolling_forecast(n_periods=2, product_id=product_id_list)
-    logging.info("model predicting finish")
+    logger.info("model predicting ...")
+    product_id_list = train_df["product_custom_id"].unique()
+    predict_df = model.rolling_forecast(
+        n_periods=2,
+        product_id=product_id_list,
+        seasonal_product_id=seasonal_product_list,
+    )
+    logger.info("model predicting finish")
     return predict_df
 
 
-@task(name="generate testing table")
-def generate_model_testing_df(
+@task
+def generate_testing_table(
     model: Predictor,
     target_time: str,
-    train_df: pd.DataFrame,
     bigquery_client: BigQueryClient,
 ) -> pd.DataFrame:
     """模型測試表."""
-    logging = get_run_logger()
-    logging.info("generating model testing table ...")
-    target_time = pd.to_datetime(target_time)
-    start_month = (target_time - pd.DateOffset(months=12)).strftime("%Y-%m-01")
-    training_info = trans_model.data_extraction.get_training_target()
-    agent_forecast = trans_model.data_extraction.get_agent_forecast_data(
-        start_month=start_month,
-        end_month=target_time,
-        training_info = training_info,
-        bigquery_client=bigquery_client,
-    ).query("M==1")[["date", "product_id_combo", "sales_agent"]] # 業務預估取當月預估值即可
-
-    test_table = (
-        get_test_data_for_reference(test_df=model.test_df, _cols="sales")
-        .query("predicted_on_date == predicted_on_date.max()")
-    ) # test_table 取預測版本最新的一期
-
-    pred_table = model._quantile_result(
-        get_test_data_for_reference(test_df=model.pred_df, _cols="sales")
-        .rename(columns={"sales": "sales_model"}),
-        target="sales_model",
-    )
-
-    test_df = (
-        test_table
-        .merge(agent_forecast, on=["date", "product_id_combo"], how="left")
-        .merge(train_df, on=["sales", "date", "product_id_combo"], how="left")
-        .merge(pred_table, on=["predicted_on_date", "product_id_combo", "date", "M"])
-        .merge(training_info[["product_name", "product_id_combo"]], on="product_id_combo", how="left")
-        .assign(
-            sales_agent=lambda df: df["sales_agent"].fillna(0),
-            positive_ind_likely=lambda df: np.where((df["sales"] >= df["likely_lb"]) & (df["sales"] <= df["likely_ub"]), 1, 0),
-            positive_ind_less_likely=lambda df: np.where((df["sales"] >= df["less_likely_lb"])
-                                                         & (df["sales"] <= df["less_likely_ub"])
-                                                         & (df["positive_ind_likely"] != 1), 1, 0),
-        )
-        .drop(columns=["year_weight"])
-        .sort_values(["product_id_combo", "M"])
-    )
-    return test_df
-
-
-@task(name="generate reference table")
-def generate_reference_table(
-    model: Predictor,
-    target_time: str,
-    train_df: pd.DataFrame,
-    bigquery_client: BigQueryClient,
-) -> pd.DataFrame:
-    """生成「高參考-低參考」表。."""
-    # 製作「高參考-低參考」表
-    logging = get_run_logger()
-    logging.info("generating reference table ...")
-    target_time = pd.to_datetime(target_time)
-    start_month = (pd.Timestamp.now("Asia/Taipei") - pd.DateOffset(months=6)).strftime("%Y-%m-01")
-    agent_forecast = trans_model.data_extraction.get_agent_forecast_data(
-        start_month=start_month,
-        end_month=target_time,
-        training_info = trans_model.data_extraction.get_training_target(),
+    logger.info("generating model testing table ...")
+    final_df, predict_df, reference_df = gen_model_testing_df(
+        model=model,
+        target_time=target_time,
         bigquery_client=bigquery_client,
     )
-    test_table = get_test_data_for_reference(test_df=model.errors)
-    combined_df = (
-        test_table
-        .merge(agent_forecast, on=["M", "date", "product_id_combo"], how="left")
-        .merge(train_df, on=["date", "product_id_combo"], how="left")
-    )
-    combined_df["sales_agent"] = combined_df["sales_agent"].fillna(0)
-    mae_df = get_mae_diff(combined_df)[["product_id_combo","bound_01_flag"]]
-    brand_df = train_df[["product_id_combo", "brand"]].drop_duplicates()
-    return mae_df.merge(brand_df, how="left", on="product_id_combo")
+    logger.info("generating model testing table finish")
+    return final_df, predict_df, reference_df
 
 
-@task(name="store test to bq")
+@task
 def store_test_to_bq(
     test_df: pd.DataFrame,
     bq_table: str,
@@ -177,74 +130,99 @@ def store_test_to_bq(
     bigquery_client: BigQueryClient,
 ) -> None:
     """將測試結果存儲到資料庫中。."""
-    logging = get_run_logger()
     # 計算好的測試資料存入 psi.f_model_testing
-    logging.info("store test to db ...")
-    test_data_to_bq(
-        test_df=test_df,
+    logger.info("store test to bq ...")
+    predict_and_test_data_to_bq(
+        df_for_upload=test_df,
         bq_table=bq_table,
         department_code=department_code,
         bigquery_client=bigquery_client,
     )
+    logger.info("store test to bq finish")
 
 
-@task(name="store prediction to bq")
+@task
+def store_metadata_and_artifacts_to_gcs(
+    bucket_name: str,
+    source_dir: str,
+    destination_dir: str,
+    gcs_client: GCSClient,
+) -> None:
+    """Upload file to gcs."""
+    logger.info("store metadata and model to gcs ...")
+    update_artifact_location(
+        root_dir=source_dir,
+        update_artifact_location=destination_dir,
+    )
+    upload_directory_to_gcs(
+        bucket_name=bucket_name,
+        source_dir=source_dir,
+        destination_dir=destination_dir,
+        gcs_client=gcs_client,
+    )
+    remove_path = Path(source_dir)
+    if remove_path.exists() and remove_path.is_dir():
+        shutil.rmtree(remove_path)
+    logger.info("store metadata and model to gcs finish")
+
+
+@task
 def store_predictions_to_bq(
-    train_df: pd.DataFrame,
     predict_df: pd.DataFrame,
     bq_table: str,
     department_code: str,
     bigquery_client: BigQueryClient,
 ) -> None:
     """將預測結果存儲到數據庫中。."""
-    logging = get_run_logger()
     # 預測好的資料存入 psi.f_model_predict
-    # P02的 training_info 欄位只有 product_id_combo、SPU,需要更改
-    training_info = (
-        trans_model.data_extraction.get_training_target()
-        [["product_name", "product_id_combo"]]
-    )
-    product_info = train_df.merge(training_info, on="product_id_combo").drop(columns=["date"])
-    logging.info("store predictions to db ...")
-    predict_data_to_bq(
-        predict_df=predict_df,
-        product_info=product_info,
+    logger.info("store predictions to bq ...")
+    predict_and_test_data_to_bq(
+        df_for_upload=predict_df,
         bq_table=bq_table,
         department_code=department_code,
         bigquery_client=bigquery_client,
     )
+    logger.info("store predictions to bq finish")
 
 
-@task(name="store reference to bq")
+@task
 def store_references_to_bq(
-    mae_df: pd.DataFrame,
+    reference_df: pd.DataFrame,
     bq_table: str,
     department_code: str,
     bigquery_client: BigQueryClient,
 ) -> None:
     """將「高參考-低參考」表存儲到數據庫中。."""
     # 計算好的高參考低參考資料存入 psi.f_model_referenceable
+    logger.info("store references to bq ...")
     reference_data_to_bq(
-        mae_df=mae_df,
+        reference_df=reference_df,
         bq_table=bq_table,
         department_code=department_code,
         bigquery_client=bigquery_client,
     )
+    logger.info("store references to bq finish")
 
 
 @flow(name=generate_flow_name())
 def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
-
-    logging = get_run_logger()
+    """Main flow."""
     bigquery_client = get_bigquery_client()
-    end_date = pd.Timestamp.now("Asia/Taipei").tz_localize(None).strftime("%Y-%m-01")
+    gcs_client = get_gcs_client()
+    end_date = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-01")
+    metadata_version_date = end_date.replace("-", "")
+    metadata_path = "mlruns/" + f"{metadata_version_date}/" + "mlruns/"
+
+    # setting mlflow tracking path which must be same as download path from gcs
+    mlflow.set_experiment(experiment_name=EXPERIMENT_NAME)
+    mlflow.set_tracking_uri(uri=metadata_path)
 
     if init:
-        logging.info("create_p03_model_predict_table ...")
+        logger.info("create_p03_model_predict_table ...")
         create_p03_model_predict_table(bigquery_client)
-        logging.info("create_p03_model_testing_table ...")
+        logger.info("create_p03_model_testing_table ...")
         create_p03_model_testing_table(bigquery_client)
-        logging.info("create_p03_model_referenceable_table ...")
+        logger.info("create_p03_model_referenceable_table ...")
         create_p03_model_referenceable_table(bigquery_client)
 
     # start_date 從 2020-01-01 開始
@@ -260,35 +238,33 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
         model=forecast_model,
         train_df=train_df,
     )
-    test_df = generate_model_testing_df(
+    test_df, predict_df, reference_df = generate_testing_table(
         model=forecast_model,
         target_time=end_date,
-        train_df=train_df,
         bigquery_client=bigquery_client,
     )
-    reference_df = generate_reference_table(
-        model=forecast_model,
-        target_time=end_date,
-        train_df=train_df,
-        bigquery_client=bigquery_client,
+    store_metadata_and_artifacts_to_gcs(
+        bucket_name=BUCKET_NAME,
+        source_dir=metadata_path,
+        destination_dir=metadata_path,
+        gcs_client=gcs_client,
     )
     store_test_to_bq(
         test_df=test_df,
         bq_table="src_ds.ds_p03_model_testing",
-        department_code=dep_code,
+        department_code=DEPT_CODE,
         bigquery_client=bigquery_client,
     )
     store_predictions_to_bq(
-        train_df=train_df,
         predict_df=predict_df,
         bq_table="src_ds.ds_p03_model_predict",
-        department_code=dep_code,
+        department_code=DEPT_CODE,
         bigquery_client=bigquery_client,
     )
     store_references_to_bq(
-        mae_df=reference_df,
+        reference_df=reference_df,
         bq_table="src_ds.ds_p03_model_referenceable",
-        department_code=dep_code,
+        department_code=DEPT_CODE,
         bigquery_client=bigquery_client,
     )
 

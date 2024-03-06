@@ -1,5 +1,4 @@
 
-
 def create_p03_model_testing():
     """Create src_ds.ds_p03_model_testing."""
     bq_query = """
