@@ -23,6 +23,7 @@ tqdm = "*"
 ckip-transformers = "*"
 pandas-flavor = "*"
 mlflow = "*"
+evidently = "*"
 
 [dev-packages]
 flake8 = "*"

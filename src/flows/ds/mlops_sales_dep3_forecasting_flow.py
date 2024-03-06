@@ -35,7 +35,6 @@ Predictor = TypeVar("Predictor")
 logger = get_logger(in_prefect=True)
 CURRENT_PATH = Path(__file__).parent.parent.parent
 BUCKET_NAME = "ml-project-hlh"
-EXPERIMENT_NAME = "Sales-Forecasting-P03"
 seasonal_product_list = load_seasonal_product_ids(
     f"{CURRENT_PATH}/utils/forecasting/sales_forecasting/seasonal_product.yml")
 
@@ -214,7 +213,6 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
     metadata_path = "mlruns/" + f"{metadata_version_date}/" + "mlruns/"
 
     # setting mlflow tracking path which must be same as download path from gcs
-    mlflow.set_experiment(experiment_name=EXPERIMENT_NAME)
     mlflow.set_tracking_uri(uri=metadata_path)
 
     if init:
