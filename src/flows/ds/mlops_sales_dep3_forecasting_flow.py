@@ -40,25 +40,25 @@ seasonal_product_list = load_seasonal_product_ids(
     f"{CURRENT_PATH}/utils/forecasting/sales_forecasting/seasonal_product.yml")
 
 
-@task(name="create_p03_model_testing_table")
+@task
 def create_p03_model_testing_table(bigquery_client: BigQueryClient) -> None:
     """Create src_ds.p03_model_testing."""
     bigquery_client.query(create_p03_model_testing()).result()
 
 
-@task(name="create_p03_model_predict_table")
+@task
 def create_p03_model_predict_table(bigquery_client: BigQueryClient) -> None:
     """Create src_ds.p03_model_predict."""
     bigquery_client.query(create_p03_model_predict()).result()
 
 
-@task(name="create_p03_model_referenceable_table")
+@task
 def create_p03_model_referenceable_table(bigquery_client: BigQueryClient) -> None:
     """Create src_ds.p03_model_referenceable."""
     bigquery_client.query(create_p03_model_referenceable()).result()
 
 
-@task(name="prepare_training_data")
+@task
 def prepare_training_data(
     start_date: str,
     end_date: str,
@@ -75,7 +75,7 @@ def prepare_training_data(
     return training_data
 
 
-@task(name="model_training")
+@task
 def train_model(train_df: pd.DataFrame) -> Predictor:
     """使用指定的訓練數據訓練模型。."""
     logger.info("model training ...")
@@ -91,7 +91,7 @@ def train_model(train_df: pd.DataFrame) -> Predictor:
     return model
 
 
-@task(name="model_predicting")
+@task
 def model_predict(model: Predictor, train_df: pd.DataFrame) -> pd.DataFrame:
     """使用指定的模型和訓練數據對未來進行預測。."""
     logger.info("model predicting ...")
@@ -105,7 +105,7 @@ def model_predict(model: Predictor, train_df: pd.DataFrame) -> pd.DataFrame:
     return predict_df
 
 
-@task(name="generate_testing_table")
+@task
 def generate_testing_table(
     model: Predictor,
     target_time: str,
@@ -122,7 +122,7 @@ def generate_testing_table(
     return final_df, predict_df, reference_df
 
 
-@task(name="store_test_to_bq")
+@task
 def store_test_to_bq(
     test_df: pd.DataFrame,
     bq_table: str,
@@ -141,7 +141,7 @@ def store_test_to_bq(
     logger.info("store test to bq finish")
 
 
-@task(name="store_metadata_and_artifacts_to_gcs")
+@task
 def store_metadata_and_artifacts_to_gcs(
     bucket_name: str,
     source_dir: str,
@@ -166,7 +166,7 @@ def store_metadata_and_artifacts_to_gcs(
     logger.info("store metadata and model to gcs finish")
 
 
-@task(name="store_predictions_to_bq")
+@task
 def store_predictions_to_bq(
     predict_df: pd.DataFrame,
     bq_table: str,
@@ -185,7 +185,7 @@ def store_predictions_to_bq(
     logger.info("store predictions to bq finish")
 
 
-@task(name="store_references_to_bq")
+@task
 def store_references_to_bq(
     reference_df: pd.DataFrame,
     bq_table: str,
