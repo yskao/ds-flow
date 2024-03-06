@@ -1,9 +1,12 @@
 
 import logging
+from pathlib import Path
 
 import mlflow
 import numpy as np
 import pandas as pd
+from evidently.test_preset import DataDriftTestPreset
+from evidently.test_suite import TestSuite
 from mlflow.models import infer_signature
 from sklearn.model_selection import train_test_split
 from statsmodels.tsa.forecasting.stl import STLForecast
@@ -12,8 +15,8 @@ from xgboost import XGBRegressor
 
 from utils.forecasting.sales_forecasting.utils import shift_all_product_id_data
 
-EXPERIMENT_NAME = "Sales-Forecasting-P03"
 LOG_MODEL_NAME = "sales_forecasting_regressor"
+EXPERIMENT_NAME = "Sales-Forecasting"
 
 class HLHMLForecast:
     """用於銷售預測功能。使用者需要提供訓練數據,並可以根據需要指定超參數進行訓練和預測."""
@@ -71,11 +74,21 @@ class HLHMLForecast:
 
     def fit(self) -> None:
         """模型訓練."""
-        mlflow.set_experiment(EXPERIMENT_NAME)
+        mlflow.set_experiment(experiment_name=EXPERIMENT_NAME)
         with mlflow.start_run(nested=True):
             self.model = XGBRegressor(**self.parameters)
-            x_train, x_test, y_train, y_test = train_test_split(self.X, self.y, test_size=0.1, random_state=12)
+            x_train, x_test, y_train, y_test = train_test_split(self.X, self.y, test_size=0.1, random_state=12, stratify=self.X[self.product_col])
             self.model.fit(x_train, y_train, eval_set=[(x_test, y_test)])
+
+            # drifting
+            data_drift_suite = TestSuite(tests=[DataDriftTestPreset()])
+            data_drift_suite.run(reference_data=x_train, current_data=x_test)
+            data_drift_suite.save_html("data_drift_suite.html")
+            mlflow.log_artifact("data_drift_suite.html")
+
+            remove_path = Path("data_drift_suite.html")
+            if remove_path.exists():
+                remove_path.unlink()
 
             # model parameters and model info
             model_params = self.model.get_xgb_params()

@@ -21,6 +21,11 @@
         "mlops",
         "dropna",
         "mlruns",
-        "MLRUN"
+        "MLRUN",
+        "evals",
+        "xgboost",
+        "statespace",
+        "TestSuite",
+        "DataDriftTestPreset"
     ]
 }
