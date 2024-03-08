@@ -106,6 +106,7 @@ def _get_model_custom_data_result(df_for_custom: pd.DataFrame, _cols: str="error
 def gen_model_testing_df(
     model: Predictor,
     target_time: str,
+    predict_df: pd.DataFrame,
     bigquery_client: BigQueryClient,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """模型測試表和參考表. 返回的第一個表是模型預估和業務預估和實際值的表, 第二個表是模型預估和業務預估的比較, 得到的參考表."""
@@ -115,6 +116,12 @@ def gen_model_testing_df(
 
     # 取得 p03 客製化品號表
     product_custom_data = get_product_custom_data_p03(bigquery_client)
+    predict_df = (
+        predict_df
+        .rename(columns={"net_sale_qty": "net_sale_qty_model", "product_id": "product_custom_id", "month": "estimate_month_gap", "order_ym": "estimate_date"})
+        .merge(product_custom_data, on=["product_custom_id"], how="left")
+    )
+    predict_df["estimate_version"] = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-01")
 
     # 業務預估取當月預估值即可 gap=1
     agent_forecast_data = get_agent_forecast_data(
@@ -146,7 +153,7 @@ def gen_model_testing_df(
         np.where(reference_df["mae_model"] < reference_df["mae_agent"]*0.9, "高參考", "可參考"),
     )
     reference_df = reference_df.merge(final_df[["product_custom_id", "estimate_version", "brand_id"]], on=["product_custom_id"], how="left")
-    return final_df, pred_data, reference_df.drop(columns=["mae_model", "mae_agent"])
+    return final_df, predict_df, reference_df.drop(columns=["mae_model", "mae_agent"])
 
 
 def predict_and_test_data_to_bq(
@@ -209,7 +216,7 @@ def reference_data_to_bq(
     """將 reference 資料比較結果存到資料庫."""
     estimate_version = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-01")
     reference_df.insert(1, "dept_code", f"{department_code}00")
-    reference_df["estimate_version"] = reference_df["estimate_version"].astype(str)
+    reference_df["estimate_version"] = estimate_version
     query_parameters = [
             ScalarQueryParameter("estimate_version", "STRING", estimate_version),
         ]

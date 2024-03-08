@@ -108,6 +108,7 @@ def model_predict(model: Predictor, train_df: pd.DataFrame) -> pd.DataFrame:
 def generate_testing_table(
     model: Predictor,
     target_time: str,
+    predict_df: pd.DataFrame,
     bigquery_client: BigQueryClient,
 ) -> pd.DataFrame:
     """模型測試表."""
@@ -115,9 +116,11 @@ def generate_testing_table(
     final_df, predict_df, reference_df = gen_model_testing_df(
         model=model,
         target_time=target_time,
+        predict_df=predict_df,
         bigquery_client=bigquery_client,
     )
     logger.info("generating model testing table finish")
+    predict_df.to_csv("/workspaces/ds-flow/src/jupyter/sales_forecasting/data/predict_df_202403.csv", index=False)
     return final_df, predict_df, reference_df
 
 
@@ -232,13 +235,14 @@ def mlops_sales_dep3_forecasting_flow(init: bool=False) -> None:
     forecast_model = train_model(
         train_df=train_df,
     )
-    predict_df = model_predict(
+    predict_tmp = model_predict(
         model=forecast_model,
         train_df=train_df,
     )
     test_df, predict_df, reference_df = generate_testing_table(
         model=forecast_model,
         target_time=end_date,
+        predict_df=predict_tmp,
         bigquery_client=bigquery_client,
     )
     store_metadata_and_artifacts_to_gcs(
