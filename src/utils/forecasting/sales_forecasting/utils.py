@@ -122,6 +122,10 @@ def gen_model_testing_df(
         .merge(product_custom_data, on=["product_custom_id"], how="left")
     )
     predict_df["estimate_version"] = pd.Timestamp.now("Asia/Taipei").strftime("%Y-%m-01")
+    predict_df["estimate_month_gap"] = (
+        pd.to_datetime(predict_df["estimate_date"]).dt.to_period("M").astype(int)+1
+        -  pd.to_datetime(predict_df["estimate_version"]).dt.to_period("M").astype(int)
+    )
 
     # 業務預估取當月預估值即可 gap=1
     agent_forecast_data = get_agent_forecast_data(
